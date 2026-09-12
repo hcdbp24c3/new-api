@@ -60,7 +60,7 @@ func newProtectedFetchHTTPClient() *http.Client {
 }
 
 func newProtectedFetchHTTPClientWithDialer(resolver ssrfResolver, dialContext func(ctx context.Context, network, address string) (net.Conn, error), getProtection func() (*common.SSRFProtection, bool, error)) *http.Client {
-	return newProtectedFetchHTTPClientWithProxy(resolver, dialContext, getProtection, http.ProxyFromEnvironment)
+	return newProtectedFetchHTTPClientWithProxy(resolver, dialContext, getProtection, proxyFromEnvironmentWithSOCKS5)
 }
 
 func newProtectedFetchHTTPClientWithProxy(resolver ssrfResolver, dialContext func(ctx context.Context, network, address string) (net.Conn, error), getProtection func() (*common.SSRFProtection, bool, error), proxy func(*http.Request) (*url.URL, error)) *http.Client {
@@ -78,7 +78,7 @@ func newProtectedFetchHTTPClientWithProxy(resolver ssrfResolver, dialContext fun
 		getProtection = currentFetchProtection
 	}
 	if proxy == nil {
-		proxy = http.ProxyFromEnvironment
+		proxy = proxyFromEnvironmentWithSOCKS5
 	}
 
 	client := &http.Client{
@@ -160,6 +160,11 @@ func (t *ssrfProtectedRoundTripper) newTransport(proxyURL *url.URL) *http.Transp
 		ForceAttemptHTTP2:   true,
 		Proxy:               proxyFunc,
 		DialContext:         dialContext,
+	}
+	if proxyURL != nil {
+		// configureProxyTransport handles http, https, socks5, and socks5h.
+		// For SOCKS5 it replaces DialContext and clears Proxy.
+		configureProxyTransport(transport, proxyURL)
 	}
 	if common.TLSInsecureSkipVerify {
 		transport.TLSClientConfig = common.InsecureTLSConfig

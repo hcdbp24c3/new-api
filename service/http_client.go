@@ -76,6 +76,40 @@ func ValidateSSRFProtectedFetchURL(urlStr string) error {
 // time.Duration without overflowing (~292 years).
 const maxTimeoutSeconds = int(math.MaxInt64 / int64(time.Second))
 
+// proxyFromEnvironmentWithSOCKS5 resolves the proxy from standard Go
+// environment variables (HTTP_PROXY, HTTPS_PROXY, ALL_PROXY, NO_PROXY) and
+// returns the parsed URL. Unlike http.ProxyFromEnvironment which only handles
+// http/https schemes, the caller should use configureProxyTransport to wire
+// the returned URL onto the transport so SOCKS4/4a/5/5h is also supported.
+func proxyFromEnvironmentWithSOCKS5(req *http.Request) (*url.URL, error) {
+	return http.ProxyFromEnvironment(req)
+}
+
+// configureEnvProxy configures a transport to use the proxy resolved from
+// environment variables (HTTP_PROXY / HTTPS_PROXY / ALL_PROXY). It supports
+// http, https, socks4, socks4a, socks5, and socks5h schemes.
+//
+// For SOCKS (4/4a/5/5h): installs a SOCKS-aware DialContext on the
+// transport. All connections (including HTTPS) go through the SOCKS tunnel.
+//
+// For http/https or no proxy: sets transport.Proxy to
+// http.ProxyFromEnvironment for standard per-request proxy resolution
+// (respects NO_PROXY, scheme-specific vars, etc.).
+func configureEnvProxy(transport *http.Transport) {
+	// Probe the environment for a proxy URL.
+	probeReq := &http.Request{URL: &url.URL{Scheme: "https"}}
+	if envProxyURL, _ := http.ProxyFromEnvironment(probeReq); envProxyURL != nil {
+		switch envProxyURL.Scheme {
+		case "socks4", "socks4a", "socks5", "socks5h":
+			transport.Proxy = nil
+			_ = configureSOCKSDialContext(transport, envProxyURL)
+			return
+		}
+	}
+	// No SOCKS env proxy — use standard per-request env proxy resolution.
+	transport.Proxy = http.ProxyFromEnvironment
+}
+
 func newRelayHTTPTransport() *http.Transport {
 	var transport *http.Transport
 	if defaultTransport, ok := http.DefaultTransport.(*http.Transport); ok && defaultTransport != nil {
@@ -86,13 +120,15 @@ func newRelayHTTPTransport() *http.Transport {
 			KeepAlive: 30 * time.Second,
 		}
 		transport = &http.Transport{
-			Proxy:                 http.ProxyFromEnvironment,
 			DialContext:           dialer.DialContext,
 			ForceAttemptHTTP2:     true,
 			TLSHandshakeTimeout:   10 * time.Second,
 			ExpectContinueTimeout: time.Second,
 		}
 	}
+	// Configure proxy from environment variables, supporting HTTP, HTTPS,
+	// and SOCKS5/SOCKS5h schemes.
+	configureEnvProxy(transport)
 	transport.MaxIdleConns = common.RelayMaxIdleConns
 	transport.MaxIdleConnsPerHost = common.RelayMaxIdleConnsPerHost
 	transport.IdleConnTimeout = time.Duration(common.RelayIdleConnTimeout) * time.Second
@@ -289,25 +325,32 @@ func configureProxyTransport(transport *http.Transport, proxyURL *url.URL) error
 	case "http", "https":
 		transport.Proxy = http.ProxyURL(proxyURL)
 		return nil
-	case "socks5", "socks5h":
+	case "socks4", "socks4a", "socks5", "socks5h":
 		transport.Proxy = nil
-		forwardDialer := &net.Dialer{
-			Timeout:   30 * time.Second,
-			KeepAlive: 30 * time.Second,
-		}
-		dialer, err := proxy.FromURL(proxyURL, forwardDialer)
-		if err != nil {
-			return err
-		}
-		contextDialer, ok := dialer.(proxy.ContextDialer)
-		if !ok {
-			return fmt.Errorf("SOCKS proxy dialer does not support context cancellation")
-		}
-		transport.DialContext = contextDialer.DialContext
-		return nil
+		return configureSOCKSDialContext(transport, proxyURL)
 	default:
-		return fmt.Errorf("unsupported proxy scheme")
+		return fmt.Errorf("unsupported proxy scheme: %s", proxyURL.Scheme)
 	}
+}
+
+// configureSOCKSDialContext installs a SOCKS-aware DialContext on the
+// transport for socks4, socks4a, socks5, and socks5h proxy URLs. It uses
+// golang.org/x/net/proxy which handles all four SOCKS variants.
+func configureSOCKSDialContext(transport *http.Transport, proxyURL *url.URL) error {
+	forwardDialer := &net.Dialer{
+		Timeout:   30 * time.Second,
+		KeepAlive: 30 * time.Second,
+	}
+	dialer, err := proxy.FromURL(proxyURL, forwardDialer)
+	if err != nil {
+		return fmt.Errorf("SOCKS proxy dialer: %w", err)
+	}
+	contextDialer, ok := dialer.(proxy.ContextDialer)
+	if !ok {
+		return fmt.Errorf("SOCKS proxy dialer does not support context cancellation")
+	}
+	transport.DialContext = contextDialer.DialContext
+	return nil
 }
 
 func newTransportFactory(proxyURL *url.URL, tlsConfig *tls.Config) (func() *http.Transport, error) {
@@ -322,8 +365,6 @@ func newTransportFactory(proxyURL *url.URL, tlsConfig *tls.Config) (func() *http
 		transport := newRelayHTTPTransport()
 		if proxyURL != nil {
 			_ = configureProxyTransport(transport, proxyURL)
-		} else {
-			transport.Proxy = http.ProxyFromEnvironment
 		}
 		if tlsConfig != nil {
 			transport.TLSClientConfig = tlsConfig.Clone()
