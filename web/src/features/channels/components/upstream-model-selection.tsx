@@ -218,8 +218,15 @@ export function UpstreamModelSelection(props: UpstreamModelSelectionProps) {
   if (categorized.added.length) defaultTab = 'new'
   else if (categorized.removed.length) defaultTab = 'removed'
 
-  // Global select-all: the set of models the checkbox controls depends on mode.
-  const allModels = showChanges ? categorized.added : categorized.filtered
+  // Global select-all: the checkbox controls ALL models visible across all
+  // tabs/categories (new + existing + removed candidates).
+  const allModels = [
+    ...new Set([
+      ...categorized.added,
+      ...categorized.existing,
+      ...categorized.removed,
+    ]),
+  ]
   const selectedSet = new Set(props.selected)
   const globalSelectedCount = allModels.filter((m) => selectedSet.has(m)).length
   const globalAllSelected =
