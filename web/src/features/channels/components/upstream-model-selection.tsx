@@ -218,6 +218,13 @@ export function UpstreamModelSelection(props: UpstreamModelSelectionProps) {
   if (categorized.added.length) defaultTab = 'new'
   else if (categorized.removed.length) defaultTab = 'removed'
 
+  // Global select-all: the set of models the checkbox controls depends on mode.
+  const allModels = showChanges ? categorized.added : categorized.filtered
+  const selectedSet = new Set(props.selected)
+  const globalSelectedCount = allModels.filter((m) => selectedSet.has(m)).length
+  const globalAllSelected =
+    allModels.length > 0 && globalSelectedCount === allModels.length
+
   return (
     <div className='space-y-3'>
       <Input
@@ -232,21 +239,27 @@ export function UpstreamModelSelection(props: UpstreamModelSelectionProps) {
             {props.summaryText ??
               t('Fetched {{count}} models', { count: props.models.length })}
           </span>
-          {search.trim().length > 0 && (
-            <Button
-              type='button'
-              variant='outline'
-              size='sm'
-              disabled={!categorized.filtered.length}
-              onClick={() =>
-                props.onChange([
-                  ...new Set([...props.selected, ...categorized.filtered]),
-                ])
+        </div>
+      )}
+      {allModels.length > 0 && (
+        <div className='flex items-center gap-2'>
+          <Checkbox
+            aria-label={t('Select all models')}
+            checked={globalAllSelected}
+            indeterminate={globalSelectedCount > 0 && !globalAllSelected}
+            onCheckedChange={(checked) => {
+              if (checked) {
+                props.onChange([...new Set([...props.selected, ...allModels])])
+              } else {
+                props.onChange(
+                  props.selected.filter((model) => !allModels.includes(model))
+                )
               }
-            >
-              {t('Select all matching models')}
-            </Button>
-          )}
+            }}
+          />
+          <Label className='cursor-pointer text-sm font-normal'>
+            {t('Select all')}
+          </Label>
         </div>
       )}
       {showChanges ? (

@@ -154,32 +154,47 @@ test('category headers keep a transparent background while expanding and collaps
   )
 })
 
-test('the matching-model action only appears for a nonblank search and disappears when cleared', async () => {
+test('the select-all checkbox selects and deselects all visible models', async () => {
+  const user = userEvent.setup()
+  render(<InlineSelection />)
+  const selectAll = screen.getByRole('checkbox', { name: 'Select all models' })
+  expect(selectAll).toBeInTheDocument()
+
+  // Initially partial: manual-model is selected but not the fetched ones.
+  expect(selectAll).not.toBeChecked()
+
+  // Click to select all.
+  await user.click(selectAll)
+  expect(screen.getByLabelText('Selected models')).toHaveTextContent(
+    'manual-model,gpt-one,gpt-two,another-model'
+  )
+  expect(selectAll).toBeChecked()
+
+  // Click again to deselect all.
+  await user.click(selectAll)
+  expect(screen.getByLabelText('Selected models')).toHaveTextContent('')
+  expect(selectAll).not.toBeChecked()
+})
+
+test('search filters models and select-all applies to filtered set', async () => {
   const user = userEvent.setup()
   render(<InlineSelection />)
   const search = screen.getByRole('textbox', { name: 'Search models...' })
-  expect(
-    screen.queryByRole('button', { name: 'Select all matching models' })
-  ).not.toBeInTheDocument()
-
-  await user.type(search, '  ')
-  expect(
-    screen.queryByRole('button', { name: 'Select all matching models' })
-  ).not.toBeInTheDocument()
+  const selectAll = screen.getByRole('checkbox', { name: 'Select all models' })
 
   await user.type(search, 'gpt-')
-  expect(
-    screen.getByRole('button', { name: 'Select all matching models' })
-  ).toBeEnabled()
-  await user.clear(search)
-  expect(
-    screen.queryByRole('button', { name: 'Select all matching models' })
-  ).not.toBeInTheDocument()
+  // Only gpt-one and gpt-two match; both unselected → checkbox unchecked.
+  expect(selectAll).not.toBeChecked()
 
-  await user.type(search, 'missing')
-  expect(
-    screen.getByRole('button', { name: 'Select all matching models' })
-  ).toBeDisabled()
+  await user.click(selectAll)
+  expect(screen.getByLabelText('Selected models')).toHaveTextContent(
+    'manual-model,gpt-one,gpt-two'
+  )
+  expect(selectAll).toBeChecked()
+
+  // Clear search → all models visible, but only gpt- ones selected.
+  await user.clear(search)
+  expect(selectAll).not.toBeChecked()
 })
 
 test('selecting search results adds only matching models and retains the manual selection', async () => {
@@ -189,9 +204,7 @@ test('selecting search results adds only matching models and retains the manual 
     screen.getByRole('textbox', { name: 'Search models...' }),
     'gpt-'
   )
-  await user.click(
-    screen.getByRole('button', { name: 'Select all matching models' })
-  )
+  await user.click(screen.getByRole('checkbox', { name: 'Select all models' }))
   expect(screen.getByLabelText('Selected models')).toHaveTextContent(
     'manual-model,gpt-one,gpt-two'
   )

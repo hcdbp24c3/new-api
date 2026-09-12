@@ -1562,9 +1562,7 @@ test('model configuration keeps unchecked candidates searchable and supports cat
   expect(category).toHaveAttribute('aria-checked', 'mixed')
   const search = dialog.getByRole('textbox', { name: 'Search models...' })
   await user.type(search, 'gpt-')
-  await user.click(
-    dialog.getByRole('button', { name: 'Select all matching models' })
-  )
+  await user.click(dialog.getByRole('checkbox', { name: 'Select all models' }))
   expect(dialog.getByRole('checkbox', { name: 'gpt-two' })).toBeChecked()
   expect(
     dialog.queryByRole('checkbox', { name: 'manual-model' })
@@ -1572,9 +1570,6 @@ test('model configuration keeps unchecked candidates searchable and supports cat
   await user.clear(search)
   await user.type(search, 'missing')
   expect(dialog.getByText('No matching items')).toBeVisible()
-  expect(
-    dialog.getByRole('button', { name: 'Select all matching models' })
-  ).toBeDisabled()
   await user.clear(search)
   expect(dialog.getByRole('checkbox', { name: 'manual-model' })).toBeChecked()
   await user.click(
