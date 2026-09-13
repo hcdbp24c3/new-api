@@ -458,8 +458,73 @@ func updateChannelBalance(channel *model.Channel) (channelBalanceResult, error) 
 	if channel.Type == constant.ChannelTypeAdvancedCustom {
 		return fetchAdvancedCustomBalance(channel)
 	}
+	if channel.ChannelInfo.IsMultiKey {
+		return updateChannelBalanceMultiKey(channel)
+	}
 	balance, err := updateStandardChannelBalance(channel)
 	return channelBalanceResult{Balance: balance}, err
+}
+
+// getEnabledKeys returns the key strings that are currently enabled for a
+// multi-key channel.  For non-multi-key channels it returns a single-element
+// slice containing channel.Key.
+func getEnabledKeys(channel *model.Channel) []string {
+	if !channel.ChannelInfo.IsMultiKey {
+		return []string{channel.Key}
+	}
+	keys := channel.GetKeys()
+	if len(keys) == 0 {
+		return nil
+	}
+	statusList := channel.ChannelInfo.MultiKeyStatusList
+	enabled := make([]string, 0, len(keys))
+	for i, key := range keys {
+		status := common.ChannelStatusEnabled
+		if statusList != nil {
+			if s, ok := statusList[i]; ok {
+				status = s
+			}
+		}
+		if status == common.ChannelStatusEnabled {
+			enabled = append(enabled, key)
+		}
+	}
+	return enabled
+}
+
+// updateChannelBalanceMultiKey queries the upstream balance for every enabled
+// key in a multi-key channel and sums the results.  The channel-level balance
+// is set to the aggregate.
+func updateChannelBalanceMultiKey(channel *model.Channel) (channelBalanceResult, error) {
+	keys := getEnabledKeys(channel)
+	if len(keys) == 0 {
+		return channelBalanceResult{}, errors.New("no enabled keys")
+	}
+
+	totalBalance := 0.0
+	queried := 0
+
+	for _, key := range keys {
+		// Snapshot original key, query with this key, restore.
+		origKey := channel.Key
+		channel.Key = key
+		balance, err := updateStandardChannelBalance(channel)
+		channel.Key = origKey
+
+		if err != nil {
+			// Skip keys that fail; continue with the rest.
+			continue
+		}
+		totalBalance += balance
+		queried++
+	}
+
+	if queried == 0 {
+		return channelBalanceResult{}, errors.New("all keys failed")
+	}
+
+	channel.UpdateBalance(totalBalance)
+	return channelBalanceResult{Balance: totalBalance}, nil
 }
 
 func updateStandardChannelBalance(channel *model.Channel) (float64, error) {
@@ -542,13 +607,6 @@ func UpdateChannelBalance(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"success": false, "message": "Task Plugin channels do not support balance queries"})
 		return
 	}
-	if channel.ChannelInfo.IsMultiKey {
-		c.JSON(http.StatusOK, gin.H{
-			"success": false,
-			"message": "多密钥渠道不支持余额查询",
-		})
-		return
-	}
 	result, err := updateChannelBalance(channel)
 	if err != nil {
 		common.ApiError(c, err)
@@ -574,9 +632,6 @@ func updateAllChannelsBalance() error {
 	for _, channel := range channels {
 		if channel.Status != common.ChannelStatusEnabled {
 			continue
-		}
-		if channel.ChannelInfo.IsMultiKey {
-			continue // skip multi-key channels
 		}
 		// TODO: support Azure
 		//if channel.Type != common.ChannelTypeOpenAI && channel.Type != common.ChannelTypeCustom {
