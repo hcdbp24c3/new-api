@@ -284,7 +284,7 @@ func enrichModels(models []*model.Model) error {
 		endpoints := make(map[string]bool)
 		quotas := make(map[int]bool)
 		for _, connection := range connections {
-			name := connection.Model
+			name := connection.BareModel
 			if !metadata.MatchesName(name) {
 				continue
 			}

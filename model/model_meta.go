@@ -122,7 +122,7 @@ func FillModelSquareStates(rows []*Model, configured map[string][]int, connectio
 	resolved := resolveModelMetadata(metadata, names)
 	available := make(map[string]bool)
 	for _, connection := range connections {
-		available[connection.Model] = true
+		available[connection.BareModel] = true
 	}
 	states := make(map[string]ModelSquareState, len(names))
 	for _, name := range names {
@@ -175,13 +175,18 @@ func FillModelSquareStates(rows []*Model, configured map[string][]int, connectio
 // GetConfiguredModelChannels includes disabled channels and reads no credentials.
 func GetConfiguredModelChannels() (map[string][]int, error) {
 	var channels []Channel
-	if err := DB.Select("id", "models").Find(&channels).Error; err != nil {
+	if err := DB.Select("id", "models", "settings").Find(&channels).Error; err != nil {
 		return nil, err
 	}
 	configured := make(map[string][]int)
 	for _, channel := range channels {
+		prefix := extractModelPrefix(channel.OtherSettings)
 		for _, name := range normalizeLookupValues(channel.GetModels()) {
-			configured[name] = append(configured[name], channel.Id)
+			bare := name
+			if prefix != "" {
+				bare = strings.TrimPrefix(name, prefix+"/")
+			}
+			configured[bare] = append(configured[bare], channel.Id)
 		}
 	}
 	return configured, nil
@@ -408,18 +413,46 @@ func GetAllModels(offset int, limit int) ([]*Model, error) {
 // ModelConnection describes an enabled route independently of catalog visibility or price.
 type ModelConnection struct {
 	AbilityWithChannel
-	ChannelName string `json:"channel_name"`
+	ChannelName    string `json:"channel_name"`
+	BareModel      string `json:"-" gorm:"-"`
+	OtherSettings  string `json:"-" gorm:"column:other_settings"`
 }
 
 func GetModelConnections() ([]ModelConnection, error) {
 	var connections []ModelConnection
 	err := DB.Table("abilities").
-		Select("abilities.*, channels.type as channel_type, channels.name as channel_name").
+		Select("abilities.*, channels.type as channel_type, channels.name as channel_name, channels.settings as other_settings").
 		Joins("JOIN channels ON abilities.channel_id = channels.id").
 		Where("abilities.enabled = ? AND channels.status = ?", true, common.ChannelStatusEnabled).
 		Order("abilities.model, abilities.channel_id").
 		Scan(&connections).Error
-	return connections, err
+	if err != nil {
+		return nil, err
+	}
+	for i := range connections {
+		prefix := extractModelPrefix(connections[i].OtherSettings)
+		if prefix != "" {
+			connections[i].BareModel = strings.TrimPrefix(connections[i].Model, prefix+"/")
+		} else {
+			connections[i].BareModel = connections[i].Model
+		}
+		connections[i].OtherSettings = "" // clear raw JSON after use
+	}
+	return connections, nil
+}
+
+// extractModelPrefix parses other_settings JSON and returns the model_prefix field.
+func extractModelPrefix(raw string) string {
+	if raw == "" {
+		return ""
+	}
+	var s struct {
+		ModelPrefix string `json:"model_prefix"`
+	}
+	if err := common.UnmarshalJsonStr(raw, &s); err != nil {
+		return ""
+	}
+	return s.ModelPrefix
 }
 
 func normalizeLookupValues(values []string) []string {
