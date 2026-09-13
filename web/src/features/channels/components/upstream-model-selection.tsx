@@ -248,27 +248,6 @@ export function UpstreamModelSelection(props: UpstreamModelSelectionProps) {
           </span>
         </div>
       )}
-      {allModels.length > 0 && (
-        <div className='flex items-center gap-2'>
-          <Checkbox
-            aria-label={t('Select all models')}
-            checked={globalAllSelected}
-            indeterminate={globalSelectedCount > 0 && !globalAllSelected}
-            onCheckedChange={(checked) => {
-              if (checked) {
-                props.onChange([...new Set([...props.selected, ...allModels])])
-              } else {
-                props.onChange(
-                  props.selected.filter((model) => !allModels.includes(model))
-                )
-              }
-            }}
-          />
-          <Label className='cursor-pointer text-sm font-normal'>
-            {t('Select all')}
-          </Label>
-        </div>
-      )}
       {showChanges ? (
         <Tabs
           key={`${props.models.length}-${categorized.removed.length}-${defaultTab}`}
@@ -294,6 +273,31 @@ export function UpstreamModelSelection(props: UpstreamModelSelectionProps) {
               </TabsTrigger>
             )}
           </TabsList>
+          {allModels.length > 0 && (
+            <div className='flex items-center gap-2 px-1 py-1.5'>
+              <Checkbox
+                aria-label={t('Select all models')}
+                checked={globalAllSelected}
+                indeterminate={globalSelectedCount > 0 && !globalAllSelected}
+                onCheckedChange={(checked) => {
+                  if (checked) {
+                    props.onChange([
+                      ...new Set([...props.selected, ...allModels]),
+                    ])
+                  } else {
+                    props.onChange(
+                      props.selected.filter(
+                        (model) => !allModels.includes(model)
+                      )
+                    )
+                  }
+                }}
+              />
+              <Label className='cursor-pointer text-sm font-normal'>
+                {t('Select all')}
+              </Label>
+            </div>
+          )}
           <TabsContent
             value='new'
             className='max-h-96 space-y-2 overflow-y-auto'
@@ -347,22 +351,51 @@ export function UpstreamModelSelection(props: UpstreamModelSelectionProps) {
           )}
         </Tabs>
       ) : (
-        <div className='max-h-96 space-y-2 overflow-y-auto'>
-          {sortedModelCategories(categorized.filtered).map(([name, models]) => (
-            <ModelCategory
-              key={name}
-              name={name}
-              models={models}
-              selected={props.selected}
-              redirectOnly={categorized.redirectOnly}
-              onChange={props.onChange}
-            />
-          ))}
-          {!categorized.filtered.length && (
-            <p className='text-muted-foreground py-3 text-sm'>
-              {t('No matching items')}
-            </p>
+        <div className='space-y-2'>
+          {allModels.length > 0 && (
+            <div className='flex items-center gap-2'>
+              <Checkbox
+                aria-label={t('Select all models')}
+                checked={globalAllSelected}
+                indeterminate={globalSelectedCount > 0 && !globalAllSelected}
+                onCheckedChange={(checked) => {
+                  if (checked) {
+                    props.onChange([
+                      ...new Set([...props.selected, ...allModels]),
+                    ])
+                  } else {
+                    props.onChange(
+                      props.selected.filter(
+                        (model) => !allModels.includes(model)
+                      )
+                    )
+                  }
+                }}
+              />
+              <Label className='cursor-pointer text-sm font-normal'>
+                {t('Select all')}
+              </Label>
+            </div>
           )}
+          <div className='max-h-96 space-y-2 overflow-y-auto'>
+            {sortedModelCategories(categorized.filtered).map(
+              ([name, models]) => (
+                <ModelCategory
+                  key={name}
+                  name={name}
+                  models={models}
+                  selected={props.selected}
+                  redirectOnly={categorized.redirectOnly}
+                  onChange={props.onChange}
+                />
+              )
+            )}
+            {!categorized.filtered.length && (
+              <p className='text-muted-foreground py-3 text-sm'>
+                {t('No matching items')}
+              </p>
+            )}
+          </div>
         </div>
       )}
       <p className='text-muted-foreground text-sm'>
