@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 
 	channelconstant "github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/relay/channel"
@@ -51,6 +52,17 @@ func (a *Adaptor) GetRequestURL(info *relaycommon.RelayInfo) (string, error) {
 	}
 	specialPlan, hasSpecialPlan := channelconstant.ChannelSpecialBases[baseURL]
 
+	// Determine the API path prefix. If the base URL already contains
+	// /api/paas or /paas (e.g. user set "https://api.z.ai/api/paas"),
+	// only append /v4. Otherwise append the full /api/paas/v4 path.
+	apiPrefix := "/api/paas/v4"
+	if strings.HasSuffix(baseURL, "/api/paas") ||
+		strings.HasSuffix(baseURL, "/api/paas/") ||
+		strings.HasSuffix(baseURL, "/paas") ||
+		strings.HasSuffix(baseURL, "/paas/") {
+		apiPrefix = "/v4"
+	}
+
 	switch info.RelayFormat {
 	case types.RelayFormatClaude:
 		if hasSpecialPlan && specialPlan.ClaudeBaseURL != "" {
@@ -63,19 +75,19 @@ func (a *Adaptor) GetRequestURL(info *relaycommon.RelayInfo) (string, error) {
 			if hasSpecialPlan && specialPlan.OpenAIBaseURL != "" {
 				return fmt.Sprintf("%s/embeddings", specialPlan.OpenAIBaseURL), nil
 			}
-			return fmt.Sprintf("%s/api/paas/v4/embeddings", baseURL), nil
+			return fmt.Sprintf("%s%s/embeddings", baseURL, apiPrefix), nil
 		case relayconstant.RelayModeImagesGenerations:
 			if hasSpecialPlan && specialPlan.OpenAIBaseURL != "" {
 				return fmt.Sprintf("%s/images/generations", specialPlan.OpenAIBaseURL), nil
 			}
-			return fmt.Sprintf("%s/api/paas/v4/images/generations", baseURL), nil
+			return fmt.Sprintf("%s%s/images/generations", baseURL, apiPrefix), nil
 		case relayconstant.RelayModeResponses:
 			return fmt.Sprintf("%s/api/v1/responses", baseURL), nil
 		default:
 			if hasSpecialPlan && specialPlan.OpenAIBaseURL != "" {
 				return fmt.Sprintf("%s/chat/completions", specialPlan.OpenAIBaseURL), nil
 			}
-			return fmt.Sprintf("%s/api/paas/v4/chat/completions", baseURL), nil
+			return fmt.Sprintf("%s%s/chat/completions", baseURL, apiPrefix), nil
 		}
 	}
 }
