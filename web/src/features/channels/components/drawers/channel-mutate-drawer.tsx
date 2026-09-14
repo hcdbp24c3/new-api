@@ -539,8 +539,8 @@ export function ChannelMutateDrawer({
   const currentProxy = formValues.proxy
   const currentHttpProtocol = formValues.http_protocol
   const {
-    unlocked: doubaoApiEditUnlocked,
-    handleClick: handleApiConfigSecretClick,
+    unlocked: _doubaoApiEditUnlocked,
+    handleClick: _handleApiConfigSecretClick,
     reset: resetDoubaoApiUnlock,
   } = useHiddenClickUnlock({
     requiredClicks: 10,
@@ -3616,77 +3616,6 @@ if (isNewChannel) {
               </>
             )}
 
-            {/* VolcEngine (type 45) - Base URL dropdown */}
-            {currentType === 45 && !doubaoApiEditUnlocked && (
-              <FormField
-                control={form.control}
-                name='base_url'
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel
-                      required
-                      className='cursor-pointer select-none'
-                      onClick={handleApiConfigSecretClick}
-                    >
-                      {t('API Base URL')}
-                    </FormLabel>
-                    <Select
-                      disabled={sensitiveLocked}
-                      items={CHANNEL_BASE_URL_OPTIONS[45]?.map((opt) => ({
-                        value: opt.value,
-                        label: t(opt.label),
-                      }))}
-                      onValueChange={field.onChange}
-                      value={
-                        field.value === 'doubao-coding-plan'
-                          ? 'https://ark.cn-beijing.volces.com'
-                          : field.value || 'https://ark.cn-beijing.volces.com'
-                      }
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent alignItemWithTrigger={false}>
-                        <SelectGroup>
-                          {CHANNEL_BASE_URL_OPTIONS[45]?.map((opt) => (
-                            <SelectItem key={opt.value} value={opt.value}>
-                              {t(opt.label)}
-                            </SelectItem>
-                          ))}
-                        </SelectGroup>
-                      </SelectContent>
-                    </Select>
-                    <FormDescription>
-                      {t('Select the API endpoint region')}
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            )}
-
-            {/* VolcEngine (type 45) - Custom API URL (unlocked) */}
-            {currentType === 45 && doubaoApiEditUnlocked && (
-              <FormField
-                control={form.control}
-                name='base_url'
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel required>{t('API Base URL')}</FormLabel>
-                    <FormControl>
-                      <Input placeholder={baseUrlPlaceholder} {...field} />
-                    </FormControl>
-                    <FormDescription>
-                      {t('Enter custom API endpoint URL')}
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            )}
-
             {/* Coze (type 49) */}
             {currentType === 49 && (
               <FormField
@@ -3710,42 +3639,40 @@ if (isNewChannel) {
               />
             )}
 
-            {/* Generic Base URL dropdown for types with predefined options */}
-            {(() => {
-              const urlOptions = CHANNEL_BASE_URL_OPTIONS[currentType]
-              if (!urlOptions || !urlOptions.length) return null
-              // Skip types that have their own dedicated section above
-              if (currentType === 45) return null
-              return (
-                <FormField
-                  control={form.control}
-                  name='base_url'
-                  render={({ field }) => (
+            {/* Predefined Base URL dropdown — separate from base_url input */}
+            {CHANNEL_BASE_URL_OPTIONS[currentType] && (
+              <FormField
+                control={form.control}
+                name='base_url'
+                render={({ field }) => {
+                  const options = CHANNEL_BASE_URL_OPTIONS[currentType]
+                  if (!options) return <></>
+                  // Check if current value matches one of the predefined options
+                  const matchedOption = options.find(
+                    (opt) => opt.value === field.value
+                  )
+                  return (
                     <FormItem>
-                      <FormLabel
-                        required
-                        className='cursor-pointer select-none'
-                        onClick={handleApiConfigSecretClick}
-                      >
-                        {t('API Base URL')}
-                      </FormLabel>
+                      <FormLabel>{t('API Endpoint')}</FormLabel>
                       <Select
                         disabled={sensitiveLocked}
-                        items={urlOptions.map((opt) => ({
+                        items={options.map((opt) => ({
                           value: opt.value,
                           label: t(opt.label),
                         }))}
-                        onValueChange={field.onChange}
-                        value={field.value || urlOptions[0]?.value}
+                        onValueChange={(val) => {
+                          field.onChange(val)
+                        }}
+                        value={matchedOption?.value ?? ''}
                       >
                         <FormControl>
                           <SelectTrigger>
-                            <SelectValue />
+                            <SelectValue placeholder={t('Select endpoint')} />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent alignItemWithTrigger={false}>
                           <SelectGroup>
-                            {urlOptions.map((opt) => (
+                            {options.map((opt) => (
                               <SelectItem key={opt.value} value={opt.value}>
                                 {t(opt.label)}
                               </SelectItem>
@@ -3754,17 +3681,22 @@ if (isNewChannel) {
                         </SelectContent>
                       </Select>
                       <FormDescription>
-                        {t('Select the API endpoint region')}
+                        {t(
+                          'Select a predefined endpoint, or edit the Base URL field below for a custom address'
+                        )}
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
-                  )}
-                />
-              )
-            })()}
+                  )
+                }}
+              />
+            )}
 
-            {/* General base_url for other types */}
-            {![3, 8, 22, 25, 26, 36, 45, 62, 63].includes(currentType) && (
+            {/* General base_url for all types (always visible as text input) */}
+            {currentType !== 3 &&
+              currentType !== 8 &&
+              currentType !== 22 &&
+              currentType !== 36 && (
               <FormField
                 control={form.control}
                 name='base_url'

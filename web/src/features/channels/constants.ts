@@ -490,73 +490,67 @@ export const FIELD_DESCRIPTIONS = {
 } as const
 
 // ============================================================================
-// Base URL Options for Multi-Endpoint Providers
-// When a channel type has predefined base URLs, render a Select dropdown
-// instead of a plain text input. Each entry maps a channel type to an array
-// of { value, label } options. The first option is the default.
+// Predefined Base URL Options
+// Maps channel type to predefined endpoint options. Each option has a value
+// (stored in base_url) and a display label. Coding plan entries use special
+// strings resolved by ChannelSpecialBases on the backend.
 // ============================================================================
 
-export const CHANNEL_BASE_URL_OPTIONS: Record<
-  number,
-  { value: string; label: string }[]
-> = {
+export interface BaseURLOption {
+  value: string
+  label: string
+}
+
+export const CHANNEL_BASE_URL_OPTIONS: Record<number, BaseURLOption[]> = {
   25: [
     // Moonshot / Kimi
-    {
-      value: 'https://api.moonshot.cn',
-      label: 'https://api.moonshot.cn',
-    },
-    {
-      value: 'https://api.kimi.com',
-      label: 'https://api.kimi.com',
-    },
+    { value: 'https://api.moonshot.cn', label: 'Moonshot (China)' },
+    { value: 'https://api.kimi.com', label: 'Kimi' },
+    { value: 'kimi-coding-plan', label: 'Kimi Coding Plan' },
   ],
   26: [
     // Zhipu GLM V4
+    { value: 'https://open.bigmodel.cn', label: 'GLM (China)' },
+    { value: 'https://api.z.ai', label: 'GLM (International)' },
+    { value: 'glm-coding-plan', label: 'GLM Coding Plan (China)' },
     {
-      value: 'https://open.bigmodel.cn',
-      label: 'https://open.bigmodel.cn (China)',
-    },
-    {
-      value: 'https://api.z.ai',
-      label: 'https://api.z.ai (International)',
+      value: 'glm-coding-plan-international',
+      label: 'GLM Coding Plan (International)',
     },
   ],
   45: [
-    // VolcEngine
+    // VolcEngine / Doubao
     {
       value: 'https://ark.cn-beijing.volces.com',
-      label: 'https://ark.cn-beijing.volces.com',
+      label: 'VolcEngine (China)',
     },
     {
       value: 'https://ark.ap-southeast.bytepluses.com',
-      label: 'https://ark.ap-southeast.bytepluses.com',
+      label: 'VolcEngine (Singapore)',
     },
+    { value: 'doubao-coding-plan', label: 'Doubao Coding Plan' },
   ],
   62: [
     // HuggingFace
-    {
-      value: 'https://router.huggingface.co',
-      label: 'https://router.huggingface.co',
-    },
+    { value: 'https://router.huggingface.co', label: 'HuggingFace Router' },
   ],
   63: [
     // XiaomiMiMo
     {
       value: 'https://api.xiaomimimo.com',
-      label: 'https://api.xiaomimimo.com (Pay-as-you-go)',
+      label: 'XiaomiMiMo (Pay-as-you-go)',
     },
     {
       value: 'https://token-plan-cn.xiaomimimo.com',
-      label: 'https://token-plan-cn.xiaomimimo.com (Token Plan - China)',
+      label: 'XiaomiMiMo Token Plan (China)',
     },
     {
       value: 'https://token-plan-sgp.xiaomimimo.com',
-      label: 'https://token-plan-sgp.xiaomimimo.com (Token Plan - Singapore)',
+      label: 'XiaomiMiMo Token Plan (Singapore)',
     },
     {
       value: 'https://token-plan-ams.xiaomimimo.com',
-      label: 'https://token-plan-ams.xiaomimimo.com (Token Plan - Europe)',
+      label: 'XiaomiMiMo Token Plan (Europe)',
     },
   ],
 }
