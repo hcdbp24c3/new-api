@@ -84,6 +84,8 @@ export const CHANNEL_TYPES = {
   59: 'Sub2API',
   60: 'New API',
   61: 'Task Plugin',
+  62: 'HuggingFace',
+  63: 'XiaomiMiMo',
 } as const
 
 export type ChannelProviderPresentation = {
@@ -163,13 +165,21 @@ export const CHANNEL_PROVIDER_PRESENTATION: Partial<
   60: {
     descriptionKey: 'Connect to model services from another New API instance',
   },
+  62: {
+    descriptionKey:
+      'Access open models through HuggingFace Router (OpenAI-compatible)',
+  },
+  63: {
+    descriptionKey:
+      'Connect to Xiaomi MiMo model services (OpenAI-compatible)',
+  },
 } satisfies Record<
   Exclude<keyof typeof CHANNEL_TYPES, 0 | typeof CHANNEL_TYPE_TASK_PLUGIN>,
   ChannelProviderPresentation
 >
 
 const CHANNEL_TYPE_DISPLAY_ORDER: number[] = [
-  1, 14, 24, 33, 43, 3, 41, 17, 45, 25, 26, 23, 48, 60, 58, 59, 61, 42, 34, 20,
+  1, 14, 24, 33, 43, 3, 41, 17, 45, 25, 26, 23, 48, 62, 63, 60, 58, 59, 61, 42, 34, 20,
   4, 40, 27, 15, 46, 18, 31, 35, 49, 19, 47, 37, 38, 39, 11, 8, 57, 22, 21, 44,
   2, 5, 36, 50, 51, 52, 53, 54, 55, 56,
 ]
@@ -480,6 +490,78 @@ export const FIELD_DESCRIPTIONS = {
 } as const
 
 // ============================================================================
+// Base URL Options for Multi-Endpoint Providers
+// When a channel type has predefined base URLs, render a Select dropdown
+// instead of a plain text input. Each entry maps a channel type to an array
+// of { value, label } options. The first option is the default.
+// ============================================================================
+
+export const CHANNEL_BASE_URL_OPTIONS: Record<
+  number,
+  { value: string; label: string }[]
+> = {
+  25: [
+    // Moonshot / Kimi
+    {
+      value: 'https://api.moonshot.cn',
+      label: 'https://api.moonshot.cn',
+    },
+    {
+      value: 'https://api.kimi.com',
+      label: 'https://api.kimi.com',
+    },
+  ],
+  26: [
+    // Zhipu GLM V4
+    {
+      value: 'https://open.bigmodel.cn',
+      label: 'https://open.bigmodel.cn (China)',
+    },
+    {
+      value: 'https://api.z.ai',
+      label: 'https://api.z.ai (International)',
+    },
+  ],
+  45: [
+    // VolcEngine
+    {
+      value: 'https://ark.cn-beijing.volces.com',
+      label: 'https://ark.cn-beijing.volces.com',
+    },
+    {
+      value: 'https://ark.ap-southeast.bytepluses.com',
+      label: 'https://ark.ap-southeast.bytepluses.com',
+    },
+  ],
+  62: [
+    // HuggingFace
+    {
+      value: 'https://router.huggingface.co',
+      label: 'https://router.huggingface.co',
+    },
+  ],
+  63: [
+    // XiaomiMiMo
+    {
+      value: 'https://api.xiaomimimo.com',
+      label: 'https://api.xiaomimimo.com (Pay-as-you-go)',
+    },
+    {
+      value: 'https://token-plan-cn.xiaomimimo.com',
+      label: 'https://token-plan-cn.xiaomimimo.com (Token Plan - China)',
+    },
+    {
+      value: 'https://token-plan-sgp.xiaomimimo.com',
+      label: 'https://token-plan-sgp.xiaomimimo.com (Token Plan - Singapore)',
+    },
+    {
+      value: 'https://token-plan-ams.xiaomimimo.com',
+      label: 'https://token-plan-ams.xiaomimimo.com (Token Plan - Europe)',
+    },
+  ],
+}
+
+// ============================================================================
 // Channel Type Specific Configurations
 // ============================================================================
 
@@ -523,6 +605,8 @@ export const TYPE_TO_KEY_PROMPT: Record<number, string> = {
   57: 'Paste Codex OAuth JSON credential (access_token / refresh_token / account_id)',
   59: 'Enter API key for this channel',
   60: 'Enter API key for this channel',
+  62: 'Format: hf_... (HuggingFace access token)',
+  63: 'Format: sk-... or tp-... (MiMo API key or Token Plan key)',
 }
 
 export const CHANNEL_TYPE_WARNINGS: Record<number, string> = {

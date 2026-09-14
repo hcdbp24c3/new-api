@@ -156,6 +156,26 @@ export const CHANNEL_TYPE_CONFIGS: Record<number, ChannelTypeConfig> = {
       models: 'Models',
     },
   },
+  62: {
+    id: 62,
+    name: CHANNEL_TYPES[62],
+    icon: 'HuggingFace',
+    hints: {
+      baseUrl: 'https://router.huggingface.co',
+      key: 'HuggingFace access token (hf_...)',
+      models: 'provider/model-name:policy (e.g., openai/gpt-oss-120b:fastest)',
+    },
+  },
+  63: {
+    id: 63,
+    name: CHANNEL_TYPES[63],
+    icon: 'XiaomiMiMo',
+    hints: {
+      baseUrl: 'https://api.xiaomimimo.com',
+      key: 'API key (sk-...) or Token Plan key (tp-...)',
+      models: 'mimo-v2.5-pro, mimo-v2.5-flash',
+    },
+  },
 }
 
 /**

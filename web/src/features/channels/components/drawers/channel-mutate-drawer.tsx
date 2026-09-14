@@ -141,6 +141,7 @@ import {
 } from '../../api'
 import {
   ADD_MODE_OPTIONS,
+  CHANNEL_BASE_URL_OPTIONS,
   CLAUDE_FIELD_PASSTHROUGH_TYPES,
   CHANNEL_STATUS_LABELS,
   CHANNEL_TYPE_OPTIONS,
@@ -3615,7 +3616,7 @@ if (isNewChannel) {
               </>
             )}
 
-            {/* VolcEngine (type 45) */}
+            {/* VolcEngine (type 45) - Base URL dropdown */}
             {currentType === 45 && !doubaoApiEditUnlocked && (
               <FormField
                 control={form.control}
@@ -3631,16 +3632,10 @@ if (isNewChannel) {
                     </FormLabel>
                     <Select
                       disabled={sensitiveLocked}
-                      items={[
-                        {
-                          value: 'https://ark.cn-beijing.volces.com',
-                          label: t('https://ark.cn-beijing.volces.com'),
-                        },
-                        {
-                          value: 'https://ark.ap-southeast.bytepluses.com',
-                          label: t('https://ark.ap-southeast.bytepluses.com'),
-                        },
-                      ]}
+                      items={CHANNEL_BASE_URL_OPTIONS[45]?.map((opt) => ({
+                        value: opt.value,
+                        label: t(opt.label),
+                      }))}
                       onValueChange={field.onChange}
                       value={
                         field.value === 'doubao-coding-plan'
@@ -3655,12 +3650,11 @@ if (isNewChannel) {
                       </FormControl>
                       <SelectContent alignItemWithTrigger={false}>
                         <SelectGroup>
-                          <SelectItem value='https://ark.cn-beijing.volces.com'>
-                            {t('https://ark.cn-beijing.volces.com')}
-                          </SelectItem>
-                          <SelectItem value='https://ark.ap-southeast.bytepluses.com'>
-                            {t('https://ark.ap-southeast.bytepluses.com')}
-                          </SelectItem>
+                          {CHANNEL_BASE_URL_OPTIONS[45]?.map((opt) => (
+                            <SelectItem key={opt.value} value={opt.value}>
+                              {t(opt.label)}
+                            </SelectItem>
+                          ))}
                         </SelectGroup>
                       </SelectContent>
                     </Select>
@@ -3716,8 +3710,61 @@ if (isNewChannel) {
               />
             )}
 
+            {/* Generic Base URL dropdown for types with predefined options */}
+            {(() => {
+              const urlOptions = CHANNEL_BASE_URL_OPTIONS[currentType]
+              if (!urlOptions || !urlOptions.length) return null
+              // Skip types that have their own dedicated section above
+              if (currentType === 45) return null
+              return (
+                <FormField
+                  control={form.control}
+                  name='base_url'
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel
+                        required
+                        className='cursor-pointer select-none'
+                        onClick={handleApiConfigSecretClick}
+                      >
+                        {t('API Base URL')}
+                      </FormLabel>
+                      <Select
+                        disabled={sensitiveLocked}
+                        items={urlOptions.map((opt) => ({
+                          value: opt.value,
+                          label: t(opt.label),
+                        }))}
+                        onValueChange={field.onChange}
+                        value={field.value || urlOptions[0]?.value}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent alignItemWithTrigger={false}>
+                          <SelectGroup>
+                            {urlOptions.map((opt) => (
+                              <SelectItem key={opt.value} value={opt.value}>
+                                {t(opt.label)}
+                              </SelectItem>
+                            ))}
+                          </SelectGroup>
+                        </SelectContent>
+                      </Select>
+                      <FormDescription>
+                        {t('Select the API endpoint region')}
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )
+            })()}
+
             {/* General base_url for other types */}
-            {![3, 8, 22, 36, 45].includes(currentType) && (
+            {![3, 8, 22, 25, 26, 36, 45, 62, 63].includes(currentType) && (
               <FormField
                 control={form.control}
                 name='base_url'
