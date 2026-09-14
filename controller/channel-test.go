@@ -1175,6 +1175,14 @@ func testChannelAllKeysForHealthCheck(ctx context.Context, channel *model.Channe
 	}()
 
 	// Process results
+	type processedResult struct {
+		index     int
+		localErr  error
+		apiError  *types.NewAPIError
+		context   *gin.Context
+	}
+	var processed []processedResult
+
 	for res := range results {
 		summary.Tested++
 
@@ -1210,18 +1218,43 @@ func testChannelAllKeysForHealthCheck(ctx context.Context, channel *model.Channe
 			summary.Disabled++
 		}
 
-		// Enable individual key if it was disabled and now works
-		if res.result.localErr == nil && newAPIError == nil && channel.ChannelInfo.IsMultiKey {
+		processed = append(processed, processedResult{
+			index:    res.index,
+			localErr: res.result.localErr,
+			apiError: newAPIError,
+			context:  res.result.context,
+		})
+	}
+
+	// Reload channel from cache to get current multi-key status after async disable operations.
+	// processChannelError runs in a goroutine, so the in-memory status list may be stale.
+	if summary.Disabled > 0 {
+		if refreshed, err := model.CacheGetChannel(channel.Id); err == nil && refreshed != nil {
+			channel.ChannelInfo.MultiKeyStatusList = refreshed.ChannelInfo.MultiKeyStatusList
+		}
+	}
+
+	// Enable individual keys that were disabled and now work
+	for _, pr := range processed {
+		if pr.localErr == nil && pr.apiError == nil && channel.ChannelInfo.IsMultiKey {
 			statusList := channel.ChannelInfo.MultiKeyStatusList
 			if statusList != nil {
-				if status, ok := statusList[res.index]; ok && status != common.ChannelStatusEnabled {
-					// Use the actual key value to enable it
-					if res.index < len(keys) {
-						service.EnableChannel(channel.Id, keys[res.index], channel.Name)
+				if status, ok := statusList[pr.index]; ok && status != common.ChannelStatusEnabled {
+					if pr.index < len(keys) {
+						service.EnableChannel(channel.Id, keys[pr.index], channel.Name)
 						summary.Enabled++
 					}
 				}
 			}
+		}
+	}
+
+	// Re-evaluate channel-level status after re-enabling keys.
+	// If all keys are now enabled, the channel should be re-enabled.
+	if summary.Enabled > 0 {
+		if refreshed, err := model.CacheGetChannel(channel.Id); err == nil && refreshed != nil {
+			channel.ChannelInfo.MultiKeyStatusList = refreshed.ChannelInfo.MultiKeyStatusList
+			channel.Status = refreshed.Status
 		}
 	}
 
@@ -1239,6 +1272,15 @@ func testChannelAllKeysForHealthCheck(ctx context.Context, channel *model.Channe
 func testChannelAllKeysSequential(ctx context.Context, channel *model.Channel, keys []string, testUserID int, allowDisable bool, disableThreshold int64, isChannelEnabled bool) channelTestSummary {
 	summary := channelTestSummary{}
 	tik := time.Now()
+
+	type keyResult struct {
+		index      int
+		result     channelKeyTestResult
+		shouldBan  bool
+		apiError   *types.NewAPIError
+	}
+
+	results := make([]keyResult, 0, len(keys))
 
 	for i := range keys {
 		result := testChannelWithKeyIndex(ctx, channel, testUserID, i, shouldUseStreamForAutomaticChannelTest(channel))
@@ -1276,18 +1318,36 @@ func testChannelAllKeysSequential(ctx context.Context, channel *model.Channel, k
 			summary.Disabled++
 		}
 
-		// Enable individual key if it was disabled and now works
-		if result.localErr == nil && newAPIError == nil && channel.ChannelInfo.IsMultiKey {
+		results = append(results, keyResult{index: i, result: result, shouldBan: shouldBanKey, apiError: newAPIError})
+	}
+
+	// Reload channel from cache to get current multi-key status after async disable operations
+	if summary.Disabled > 0 {
+		if refreshed, err := model.CacheGetChannel(channel.Id); err == nil && refreshed != nil {
+			channel.ChannelInfo.MultiKeyStatusList = refreshed.ChannelInfo.MultiKeyStatusList
+		}
+	}
+
+	// Enable individual keys that were disabled and now work
+	for _, kr := range results {
+		if kr.result.localErr == nil && kr.apiError == nil && channel.ChannelInfo.IsMultiKey {
 			statusList := channel.ChannelInfo.MultiKeyStatusList
 			if statusList != nil {
-				if status, ok := statusList[i]; ok && status != common.ChannelStatusEnabled {
-					// Use the actual key value to enable it
-					if i < len(keys) {
-						service.EnableChannel(channel.Id, keys[i], channel.Name)
+				if status, ok := statusList[kr.index]; ok && status != common.ChannelStatusEnabled {
+					if kr.index < len(keys) {
+						service.EnableChannel(channel.Id, keys[kr.index], channel.Name)
 						summary.Enabled++
 					}
 				}
 			}
+		}
+	}
+
+	// Re-evaluate channel-level status after re-enabling keys
+	if summary.Enabled > 0 {
+		if refreshed, err := model.CacheGetChannel(channel.Id); err == nil && refreshed != nil {
+			channel.ChannelInfo.MultiKeyStatusList = refreshed.ChannelInfo.MultiKeyStatusList
+			channel.Status = refreshed.Status
 		}
 	}
 

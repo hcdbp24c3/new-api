@@ -254,7 +254,10 @@ func (channel *Channel) GetNextEnabledKey() (string, int, *types.NewAPIError) {
 
 		channelInfo, err := CacheGetChannelInfo(channel.Id)
 		if err != nil {
-			return "", 0, types.NewError(err, types.ErrorCodeGetChannelFailed, types.ErrOptionWithSkipRetry())
+			// Fallback: use the channel's own info when cache is cold.
+			// This prevents "fail get channel" on newly created channels
+			// or after cache invalidation.
+			channelInfo = &channel.ChannelInfo
 		}
 		defer func() {
 			if common.DebugEnabled {

@@ -3874,7 +3874,9 @@ if (isNewChannel) {
                           value: option.value,
                           label: t(option.label),
                         }))}
-                        onValueChange={field.onChange}
+                        onValueChange={(v) => {
+                          queueMicrotask(() => field.onChange(v))
+                        }}
                         value={field.value}
                       >
                         <FormControl>
@@ -4107,7 +4109,9 @@ if (isNewChannel) {
                             label: t('Replace all existing keys'),
                           },
                         ]}
-                        onValueChange={field.onChange}
+                        onValueChange={(v) => {
+                          queueMicrotask(() => field.onChange(v))
+                        }}
                         value={field.value}
                       >
                         <FormControl>
@@ -4161,7 +4165,11 @@ if (isNewChannel) {
                             label: t('Polling'),
                           },
                         ]}
-                        onValueChange={field.onChange}
+                        onValueChange={(v) => {
+                          // Defer state update to avoid interrupting Base UI's
+                          // close animation, which can leave the dropdown open.
+                          queueMicrotask(() => field.onChange(v))
+                        }}
                         value={field.value}
                       >
                         <FormControl>
