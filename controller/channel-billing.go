@@ -397,7 +397,8 @@ func updateChannelStepFunBalance(channel *model.Channel) (float64, error) {
 	return response.Balance, nil
 }
 
-func updateChannelOpenCodeGoBalance(channel *model.Channel) (float64, error) {
+func updateChannelOpenCodeBalance(channel *model.Channel) (float64, error) {
+	// Try Go subscription usage endpoint first (has actual usage data)
 	url := "https://opencode.ai/zen/go/v1/usage"
 	body, err := GetResponseBody("GET", url, channel, GetAuthHeader(channel.Key))
 	if err != nil {
@@ -627,8 +628,8 @@ func updateStandardChannelBalance(channel *model.Channel) (float64, error) {
 	case constant.ChannelTypeGroq:
 		// Groq has no public balance API
 		return 0, errors.New("Groq does not expose a balance API")
-	case constant.ChannelTypeOpenCodeGo:
-		return updateChannelOpenCodeGoBalance(channel)
+	case constant.ChannelTypeOpenCode:
+		return updateChannelOpenCodeBalance(channel)
 	default:
 		return 0, errors.New("尚未实现")
 	}

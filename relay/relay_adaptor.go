@@ -137,7 +137,7 @@ func GetAdaptor(apiType int) channel.Adaptor {
 		return &openai.Adaptor{}
 	case constant.APITypeGroq:
 		return &openai.Adaptor{}
-	case constant.APITypeOpenCodeGo:
+	case constant.APITypeOpenCode:
 		return &openai.Adaptor{}
 	}
 	return nil

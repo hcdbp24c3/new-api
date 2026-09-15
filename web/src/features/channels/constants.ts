@@ -91,7 +91,7 @@ export const CHANNEL_TYPES = {
   66: 'Nvidia',
   67: 'StepFun',
   68: 'Groq',
-  69: 'OpenCode Go',
+  69: 'OpenCode',
 } as const
 
 export type ChannelProviderPresentation = {
@@ -201,7 +201,7 @@ export const CHANNEL_PROVIDER_PRESENTATION: Partial<
   },
   69: {
     descriptionKey:
-      'Access OpenCode Go subscription models including GPT, Grok, Kimi and more (OpenAI-compatible)',
+      'Access OpenCode models including GPT, Claude, Grok, Kimi and more (Zen pay-as-you-go or Go subscription)',
   },
 } satisfies Record<
   Exclude<keyof typeof CHANNEL_TYPES, 0 | typeof CHANNEL_TYPE_TASK_PLUGIN>,
@@ -604,8 +604,9 @@ export const CHANNEL_BASE_URL_OPTIONS: Record<number, BaseURLOption[]> = {
     { value: 'https://api.groq.com/openai', label: 'Groq' },
   ],
   69: [
-    // OpenCode Go
-    { value: 'https://opencode.ai/zen/go', label: 'OpenCode Go' },
+    // OpenCode
+    { value: 'https://opencode.ai/zen/v1', label: 'OpenCode Zen (Pay-as-you-go)' },
+    { value: 'https://opencode.ai/zen/go/v1', label: 'OpenCode Go (Subscription)' },
   ],
 }
 
@@ -660,7 +661,7 @@ export const TYPE_TO_KEY_PROMPT: Record<number, string> = {
   66: 'Format: nvapi-... (Nvidia API key)',
   67: 'Format: sk-... (StepFun API key)',
   68: 'Format: gsk_... (Groq API key)',
-  69: 'Format: sk-... (OpenCode Zen or Go API key)',
+  69: 'Format: sk-... (OpenCode API key)',
 }
 
 export const CHANNEL_TYPE_WARNINGS: Record<number, string> = {
