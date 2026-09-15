@@ -580,10 +580,6 @@ export const CHANNEL_BASE_URL_OPTIONS: Record<number, BaseURLOption[]> = {
     },
     { value: 'doubao-coding-plan', label: 'Doubao Coding Plan' },
   ],
-  62: [
-    // HuggingFace
-    { value: 'https://router.huggingface.co', label: 'HuggingFace Router' },
-  ],
   63: [
     // XiaomiMiMo
     {
@@ -618,10 +614,6 @@ export const CHANNEL_BASE_URL_OPTIONS: Record<number, BaseURLOption[]> = {
     // StepFun
     { value: 'https://api.stepfun.com', label: 'StepFun (China)' },
     { value: 'https://api.stepfun.ai', label: 'StepFun (International)' },
-  ],
-  68: [
-    // Groq
-    { value: 'https://api.groq.com/openai', label: 'Groq' },
   ],
   69: [
     // OpenCode
