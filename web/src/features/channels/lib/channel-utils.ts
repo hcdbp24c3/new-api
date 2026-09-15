@@ -95,6 +95,9 @@ export function getChannelTypeIcon(type: number): string {
     20: 'OpenRouter', // OpenRouter
     62: 'HuggingFace', // HuggingFace
     63: 'XiaomiMiMo', // XiaomiMiMo
+    64: 'Meta', // Meta AI
+    65: 'SenseNova', // SenseNova
+    66: 'Nvidia', // Nvidia
 
     // Image/Video generation
     2: 'Midjourney', // MjProxy

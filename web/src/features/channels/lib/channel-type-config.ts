@@ -176,6 +176,36 @@ export const CHANNEL_TYPE_CONFIGS: Record<number, ChannelTypeConfig> = {
       models: 'mimo-v2.5-pro, mimo-v2.5-flash',
     },
   },
+  64: {
+    id: 64,
+    name: CHANNEL_TYPES[64],
+    icon: 'Meta',
+    hints: {
+      baseUrl: 'https://api.meta.ai',
+      key: 'Meta API key from dev.meta.ai',
+      models: 'Llama-4-Maverick, Llama-4-Scout, Llama-3.3-70B',
+    },
+  },
+  65: {
+    id: 65,
+    name: CHANNEL_TYPES[65],
+    icon: 'SenseNova',
+    hints: {
+      baseUrl: 'https://token.sensenova.cn',
+      key: 'SenseNova API key (sk-...)',
+      models: 'sensenova-6.8-flash-lite, DeepSeek V4 Pro',
+    },
+  },
+  66: {
+    id: 66,
+    name: CHANNEL_TYPES[66],
+    icon: 'Nvidia',
+    hints: {
+      baseUrl: 'https://integrate.api.nvidia.com',
+      key: 'Nvidia API key (nvapi-...)',
+      models: 'nvidia/llama-3.1-70b-instruct, nvidia/nemotron-3-ultra-550b',
+    },
+  },
 }
 
 /**

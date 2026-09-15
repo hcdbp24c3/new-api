@@ -61,6 +61,9 @@ const (
 	ChannelTypeTaskPlugin     = 61
 	ChannelTypeHuggingFace    = 62
 	ChannelTypeXiaomiMiMo     = 63
+	ChannelTypeMetaAI         = 64
+	ChannelTypeSenseNova      = 65
+	ChannelTypeNvidia         = 66
 	ChannelTypeDummy          // this one is only for count, do not add any channel after this
 
 )
@@ -132,6 +135,9 @@ var ChannelBaseURLs = []string{
 	"",                                          //61
 	"https://router.huggingface.co",             //62
 	"https://api.xiaomimimo.com",                //63
+	"https://api.meta.ai",                       //64
+	"https://token.sensenova.cn",                //65
+	"https://integrate.api.nvidia.com",          //66
 }
 
 func GetChannelBaseURL(channelType int) string {
@@ -202,6 +208,9 @@ var ChannelTypeNames = map[int]string{
 	ChannelTypeTaskPlugin:     "Task Plugin",
 	ChannelTypeHuggingFace:    "HuggingFace",
 	ChannelTypeXiaomiMiMo:     "XiaomiMiMo",
+	ChannelTypeMetaAI:         "Meta AI",
+	ChannelTypeSenseNova:      "SenseNova",
+	ChannelTypeNvidia:         "Nvidia",
 }
 
 func GetChannelTypeName(channelType int) string {

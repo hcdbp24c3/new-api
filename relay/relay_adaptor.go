@@ -127,6 +127,12 @@ func GetAdaptor(apiType int) channel.Adaptor {
 		return &openai.Adaptor{}
 	case constant.APITypeXiaomiMiMo:
 		return &openai.Adaptor{}
+	case constant.APITypeMetaAI:
+		return &openai.Adaptor{}
+	case constant.APITypeSenseNova:
+		return &openai.Adaptor{}
+	case constant.APITypeNvidia:
+		return &openai.Adaptor{}
 	}
 	return nil
 }

@@ -85,6 +85,12 @@ func ChannelType2APIType(channelType int) (int, bool) {
 		apiType = constant.APITypeHuggingFace
 	case constant.ChannelTypeXiaomiMiMo:
 		apiType = constant.APITypeXiaomiMiMo
+	case constant.ChannelTypeMetaAI:
+		apiType = constant.APITypeMetaAI
+	case constant.ChannelTypeSenseNova:
+		apiType = constant.APITypeSenseNova
+	case constant.ChannelTypeNvidia:
+		apiType = constant.APITypeNvidia
 	}
 	if apiType == -1 {
 		// Task plugin channels are served by the task relay and must never

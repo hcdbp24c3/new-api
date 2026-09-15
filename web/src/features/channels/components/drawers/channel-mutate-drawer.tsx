@@ -374,27 +374,32 @@ function SubHeading(props: {
 
 // ============================================================================
 // PredefinedEndpointSelector — visual-only endpoint picker
-// Shows friendly labels + actual URL as gray text. Does NOT modify base_url.
+// Shows friendly labels + actual URL as gray text inside base_url input.
+// Does NOT modify base_url value. Label click opens dropdown.
 // ============================================================================
 
 function PredefinedEndpointSelector({
   type,
   sensitiveLocked,
+  onUrlChange,
 }: {
   type: number
   sensitiveLocked: boolean
+  onUrlChange: (url: string) => void
 }) {
   const { t } = useTranslation()
   const options = CHANNEL_BASE_URL_OPTIONS[type]
   const [selectedValue, setSelectedValue] = useState('')
+  const selectRef = useRef<HTMLButtonElement>(null)
 
   if (!options || options.length === 0) return null
 
-  const matchedOption = options.find((opt) => opt.value === selectedValue)
-
   return (
     <div className='space-y-2'>
-      <label className='text-sm font-medium leading-none'>
+      <label
+        className='text-sm font-medium leading-none cursor-pointer'
+        onClick={() => selectRef.current?.click()}
+      >
         {t('API Endpoint')}
       </label>
       <Select
@@ -403,10 +408,14 @@ function PredefinedEndpointSelector({
           value: opt.value,
           label: t(opt.label),
         }))}
-        onValueChange={(val) => setSelectedValue(val ?? '')}
+        onValueChange={(val) => {
+          const v = val ?? ''
+          setSelectedValue(v)
+          onUrlChange(v)
+        }}
         value={selectedValue}
       >
-        <SelectTrigger>
+        <SelectTrigger ref={selectRef}>
           <SelectValue placeholder={t('Select endpoint')} />
         </SelectTrigger>
         <SelectContent alignItemWithTrigger={false}>
@@ -419,11 +428,6 @@ function PredefinedEndpointSelector({
           </SelectGroup>
         </SelectContent>
       </Select>
-      {matchedOption && (
-        <p className='text-sm text-muted-foreground font-mono break-all'>
-          {matchedOption.value}
-        </p>
-      )}
     </div>
   )
 }
@@ -581,8 +585,11 @@ export function ChannelMutateDrawer({
   const keyMode = formValues.key_mode
   const currentGroups = formValues.group
   const currentType = formValues.type
+  const [selectedEndpointUrl, setSelectedEndpointUrl] = useState('')
   const baseUrlPlaceholder =
-    defaultBaseURLs?.[currentType] || t(FIELD_PLACEHOLDERS.BASE_URL)
+    selectedEndpointUrl ||
+    defaultBaseURLs?.[currentType] ||
+    t(FIELD_PLACEHOLDERS.BASE_URL)
   const currentStatus = formValues.status
   const currentBaseUrl = formValues.base_url
   const currentTaskPluginKey = formValues.task_plugin_key
@@ -591,6 +598,11 @@ export function ChannelMutateDrawer({
   const currentModelMapping = formValues.model_mapping
   const awsKeyType = formValues.aws_key_type
   const vertexKeyType = formValues.vertex_key_type
+
+  // Reset endpoint selection when channel type changes
+  useEffect(() => {
+    setSelectedEndpointUrl('')
+  }, [currentType])
   const upstreamModelUpdateCheckEnabled =
     formValues.upstream_model_update_check_enabled
   const currentSettings = formValues.settings
@@ -3704,6 +3716,7 @@ if (isNewChannel) {
               <PredefinedEndpointSelector
                 type={currentType}
                 sensitiveLocked={sensitiveLocked}
+                onUrlChange={setSelectedEndpointUrl}
               />
             )}
 
