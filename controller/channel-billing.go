@@ -398,39 +398,43 @@ func updateChannelStepFunBalance(channel *model.Channel) (float64, error) {
 }
 
 func updateChannelOpenCodeBalance(channel *model.Channel) (float64, error) {
-	// Try Go subscription usage endpoint first (has actual usage data)
-	url := "https://opencode.ai/zen/go/v1/usage"
-	body, err := GetResponseBody("GET", url, channel, GetAuthHeader(channel.Key))
+	// Try Zen balance first (pay-as-you-go wallets)
+	body, err := GetResponseBody("GET", "https://opencode.ai/zen/v1/balance", channel, GetAuthHeader(channel.Key))
+	if err == nil {
+		var zenResp struct {
+			Balance  float64 `json:"balance"`
+			Currency string  `json:"currency"`
+		}
+		if common.Unmarshal(body, &zenResp) == nil && zenResp.Balance > 0 {
+			channel.UpdateBalance(zenResp.Balance)
+			return zenResp.Balance, nil
+		}
+	}
+	// Fallback: Go subscription usage endpoint (rolling/weekly/monthly %)
+	body, err = GetResponseBody("GET", "https://opencode.ai/zen/go/v1/usage", channel, GetAuthHeader(channel.Key))
 	if err != nil {
 		return 0, err
 	}
-	var response struct {
+	var goResp struct {
 		Usage struct {
 			Rolling struct {
-				Status   string  `json:"status"`
-				Percent  float64 `json:"percent"`
-				ResetsAt string  `json:"resetsAt"`
+				Percent float64 `json:"percent"`
 			} `json:"rolling"`
 			Weekly struct {
-				Status   string  `json:"status"`
-				Percent  float64 `json:"percent"`
-				ResetsAt string  `json:"resetsAt"`
+				Percent float64 `json:"percent"`
 			} `json:"weekly"`
 			Monthly struct {
-				Status   string  `json:"status"`
-				Percent  float64 `json:"percent"`
-				ResetsAt string  `json:"resetsAt"`
+				Percent float64 `json:"percent"`
 			} `json:"monthly"`
 		} `json:"usage"`
 	}
-	err = common.Unmarshal(body, &response)
+	err = common.Unmarshal(body, &goResp)
 	if err != nil {
 		return 0, err
 	}
-	// Return the average remaining percentage across all windows
-	avgRemaining := ((100 - response.Usage.Rolling.Percent) +
-		(100 - response.Usage.Weekly.Percent) +
-		(100 - response.Usage.Monthly.Percent)) / 3
+	avgRemaining := ((100 - goResp.Usage.Rolling.Percent) +
+		(100 - goResp.Usage.Weekly.Percent) +
+		(100 - goResp.Usage.Monthly.Percent)) / 3
 	channel.UpdateBalance(avgRemaining)
 	return avgRemaining, nil
 }
