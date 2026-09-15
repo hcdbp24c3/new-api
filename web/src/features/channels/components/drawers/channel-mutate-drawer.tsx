@@ -372,6 +372,66 @@ function SubHeading(props: {
   )
 }
 
+// ============================================================================
+// PredefinedEndpointSelector — visual-only endpoint picker
+// Shows friendly labels + actual URL as gray text. Does NOT modify base_url.
+// ============================================================================
+
+function PredefinedEndpointSelector({
+  type,
+  sensitiveLocked,
+}: {
+  type: number
+  sensitiveLocked: boolean
+}) {
+  const { t } = useTranslation()
+  const options = CHANNEL_BASE_URL_OPTIONS[type]
+  const [selectedValue, setSelectedValue] = useState('')
+
+  if (!options || options.length === 0) return null
+
+  const matchedOption = options.find((opt) => opt.value === selectedValue)
+
+  return (
+    <div className='space-y-2'>
+      <label className='text-sm font-medium leading-none'>
+        {t('API Endpoint')}
+      </label>
+      <Select
+        disabled={sensitiveLocked}
+        items={options.map((opt) => ({
+          value: opt.value,
+          label: t(opt.label),
+        }))}
+        onValueChange={(val) => setSelectedValue(val ?? '')}
+        value={selectedValue}
+      >
+        <SelectTrigger>
+          <SelectValue placeholder={t('Select endpoint')} />
+        </SelectTrigger>
+        <SelectContent alignItemWithTrigger={false}>
+          <SelectGroup>
+            {options.map((opt) => (
+              <SelectItem key={opt.value} value={opt.value}>
+                {t(opt.label)}
+              </SelectItem>
+            ))}
+          </SelectGroup>
+        </SelectContent>
+      </Select>
+      {matchedOption && (
+        <p className='text-sm text-muted-foreground font-mono break-all'>
+          {matchedOption.value}
+        </p>
+      )}
+    </div>
+  )
+}
+
+// ============================================================================
+// Main Component
+// ============================================================================
+
 export function ChannelMutateDrawer({
   open,
   onOpenChange,
@@ -3639,56 +3699,11 @@ if (isNewChannel) {
               />
             )}
 
-            {/* Predefined Base URL dropdown — separate from base_url input */}
+            {/* Predefined Base URL dropdown — visual selector only, does NOT modify base_url */}
             {CHANNEL_BASE_URL_OPTIONS[currentType] && (
-              <FormField
-                control={form.control}
-                name='base_url'
-                render={({ field }) => {
-                  const options = CHANNEL_BASE_URL_OPTIONS[currentType]
-                  if (!options) return <></>
-                  // Check if current value matches one of the predefined options
-                  const matchedOption = options.find(
-                    (opt) => opt.value === field.value
-                  )
-                  return (
-                    <FormItem>
-                      <FormLabel>{t('API Endpoint')}</FormLabel>
-                      <Select
-                        disabled={sensitiveLocked}
-                        items={options.map((opt) => ({
-                          value: opt.value,
-                          label: t(opt.label),
-                        }))}
-                        onValueChange={(val) => {
-                          field.onChange(val)
-                        }}
-                        value={matchedOption?.value ?? ''}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder={t('Select endpoint')} />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent alignItemWithTrigger={false}>
-                          <SelectGroup>
-                            {options.map((opt) => (
-                              <SelectItem key={opt.value} value={opt.value}>
-                                {t(opt.label)}
-                              </SelectItem>
-                            ))}
-                          </SelectGroup>
-                        </SelectContent>
-                      </Select>
-                      <FormDescription>
-                        {t(
-                          'Select a predefined endpoint, or edit the Base URL field below for a custom address'
-                        )}
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )
-                }}
+              <PredefinedEndpointSelector
+                type={currentType}
+                sensitiveLocked={sensitiveLocked}
               />
             )}
 
