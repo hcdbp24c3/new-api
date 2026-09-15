@@ -101,6 +101,10 @@ export function getChannelTypeIcon(type: number): string {
     67: 'StepFun', // StepFun
     68: 'Groq', // Groq
     69: 'OpenCode', // OpenCode Go
+    70: 'Volcengine', // VolcEngine API
+    71: 'Ollama', // Ollama Cloud
+    72: 'FreeModel', // FreeModel
+    73: 'NousResearch', // Nous Research
 
     // Image/Video generation
     2: 'Midjourney', // MjProxy

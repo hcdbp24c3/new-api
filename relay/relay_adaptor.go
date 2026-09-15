@@ -139,6 +139,14 @@ func GetAdaptor(apiType int) channel.Adaptor {
 		return &openai.Adaptor{}
 	case constant.APITypeOpenCode:
 		return &openai.Adaptor{}
+	case constant.APITypeVolcEngineAPI:
+		return &openai.Adaptor{}
+	case constant.APITypeOllamaCloud:
+		return &ollama.Adaptor{}
+	case constant.APITypeFreeModel:
+		return &openai.Adaptor{}
+	case constant.APITypeNousResearch:
+		return &openai.Adaptor{}
 	}
 	return nil
 }

@@ -92,6 +92,10 @@ export const CHANNEL_TYPES = {
   67: 'StepFun',
   68: 'Groq',
   69: 'OpenCode',
+  70: 'VolcEngine API',
+  71: 'Ollama Cloud',
+  72: 'FreeModel',
+  73: 'Nous Research',
 } as const
 
 export type ChannelProviderPresentation = {
@@ -203,13 +207,29 @@ export const CHANNEL_PROVIDER_PRESENTATION: Partial<
     descriptionKey:
       'Access OpenCode models including GPT, Claude, Grok, Kimi and more (Zen pay-as-you-go or Go subscription)',
   },
+  70: {
+    descriptionKey:
+      'Access VolcEngine Ark models including Doubao, DeepSeek and more (OpenAI-compatible)',
+  },
+  71: {
+    descriptionKey:
+      'Access cloud-hosted Ollama models via ollama.com (Ollama native API)',
+  },
+  72: {
+    descriptionKey:
+      'Access FreeModel models including GPT, Claude and more (OpenAI-compatible)',
+  },
+  73: {
+    descriptionKey:
+      'Access Nous Research models including Hermes and more (OpenAI-compatible)',
+  },
 } satisfies Record<
   Exclude<keyof typeof CHANNEL_TYPES, 0 | typeof CHANNEL_TYPE_TASK_PLUGIN>,
   ChannelProviderPresentation
 >
 
 const CHANNEL_TYPE_DISPLAY_ORDER: number[] = [
-  1, 14, 24, 33, 43, 3, 41, 17, 45, 25, 26, 23, 48, 62, 63, 64, 65, 66, 67, 68, 69, 60, 58, 59, 61, 42, 34, 20,
+  1, 14, 24, 33, 43, 3, 41, 17, 45, 25, 26, 23, 48, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 60, 58, 59, 61, 42, 34, 20,
   4, 40, 27, 15, 46, 18, 31, 35, 49, 19, 47, 37, 38, 39, 11, 8, 57, 22, 21, 44,
   2, 5, 36, 50, 51, 52, 53, 54, 55, 56,
 ]
@@ -608,6 +628,16 @@ export const CHANNEL_BASE_URL_OPTIONS: Record<number, BaseURLOption[]> = {
     { value: 'https://opencode.ai/zen/v1', label: 'OpenCode Zen (Pay-as-you-go)' },
     { value: 'https://opencode.ai/zen/go/v1', label: 'OpenCode Go (Subscription)' },
   ],
+  70: [
+    // VolcEngine API
+    { value: 'https://ark.cn-beijing.volces.com/api/v3', label: 'VolcEngine Ark (China)' },
+    { value: 'https://ark.ap-southeast.bytepluses.com/api/v3', label: 'VolcEngine Ark (Singapore)' },
+  ],
+  72: [
+    // FreeModel
+    { value: 'https://api.freemodel.dev', label: 'FreeModel (OpenAI-compatible)' },
+    { value: 'https://cc.freemodel.dev', label: 'FreeModel (Anthropic-compatible)' },
+  ],
 }
 
 // ============================================================================
@@ -662,6 +692,9 @@ export const TYPE_TO_KEY_PROMPT: Record<number, string> = {
   67: 'Format: sk-... (StepFun API key)',
   68: 'Format: gsk_... (Groq API key)',
   69: 'Format: sk-... (OpenCode API key)',
+  70: 'Format: ep-... (VolcEngine Ark API key)',
+  72: 'Format: fm-... (FreeModel API key)',
+  73: 'Format: nous-... (Nous Research API key)',
 }
 
 export const CHANNEL_TYPE_WARNINGS: Record<number, string> = {

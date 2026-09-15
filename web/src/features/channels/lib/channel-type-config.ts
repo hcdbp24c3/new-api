@@ -236,6 +236,46 @@ export const CHANNEL_TYPE_CONFIGS: Record<number, ChannelTypeConfig> = {
       models: 'gpt-5.6-luna, grok-4.6, deepseek-v4-pro, claude-opus-5',
     },
   },
+  70: {
+    id: 70,
+    name: CHANNEL_TYPES[70],
+    icon: 'Volcengine',
+    hints: {
+      baseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
+      key: 'VolcEngine Ark API key (ep-...)',
+      models: 'doubao-seed-2-0-pro, doubao-pro-32k',
+    },
+  },
+  71: {
+    id: 71,
+    name: CHANNEL_TYPES[71],
+    icon: 'Ollama',
+    hints: {
+      baseUrl: 'https://ollama.com/api',
+      key: 'Ollama Cloud API key (ollama_...)',
+      models: 'gpt-oss:120b, llama-3.3-70b',
+    },
+  },
+  72: {
+    id: 72,
+    name: CHANNEL_TYPES[72],
+    icon: 'FreeModel',
+    hints: {
+      baseUrl: 'https://api.freemodel.dev',
+      key: 'FreeModel API key (fm-...)',
+      models: 'gpt-5.5, claude-fable-5',
+    },
+  },
+  73: {
+    id: 73,
+    name: CHANNEL_TYPES[73],
+    icon: 'NousResearch',
+    hints: {
+      baseUrl: 'https://inference-api.nousresearch.com/v1',
+      key: 'Nous Research API key',
+      models: 'hermes-4, claude-sonnet-4.6',
+    },
+  },
 }
 
 /**

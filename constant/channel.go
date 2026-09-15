@@ -67,6 +67,10 @@ const (
 	ChannelTypeStepFun        = 67
 	ChannelTypeGroq           = 68
 	ChannelTypeOpenCode       = 69
+	ChannelTypeVolcEngineAPI  = 70
+	ChannelTypeOllamaCloud    = 71
+	ChannelTypeFreeModel      = 72
+	ChannelTypeNousResearch   = 73
 	ChannelTypeDummy          // this one is only for count, do not add any channel after this
 
 )
@@ -144,6 +148,10 @@ var ChannelBaseURLs = []string{
 	"https://api.stepfun.com",                   //67
 	"https://api.groq.com/openai",               //68
 	"https://opencode.ai/zen/v1",                //69
+	"https://ark.cn-beijing.volces.com/api/v3",  //70
+	"https://ollama.com/api",                     //71
+	"https://api.freemodel.dev",                  //72
+	"https://inference-api.nousresearch.com/v1",  //73
 }
 
 func GetChannelBaseURL(channelType int) string {
@@ -220,6 +228,10 @@ var ChannelTypeNames = map[int]string{
 	ChannelTypeStepFun:        "StepFun",
 	ChannelTypeGroq:           "Groq",
 	ChannelTypeOpenCode:       "OpenCode",
+	ChannelTypeVolcEngineAPI:  "VolcEngine API",
+	ChannelTypeOllamaCloud:    "Ollama Cloud",
+	ChannelTypeFreeModel:      "FreeModel",
+	ChannelTypeNousResearch:   "Nous Research",
 }
 
 func GetChannelTypeName(channelType int) string {

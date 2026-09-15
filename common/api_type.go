@@ -97,6 +97,14 @@ func ChannelType2APIType(channelType int) (int, bool) {
 		apiType = constant.APITypeGroq
 	case constant.ChannelTypeOpenCode:
 		apiType = constant.APITypeOpenCode
+	case constant.ChannelTypeVolcEngineAPI:
+		apiType = constant.APITypeVolcEngineAPI
+	case constant.ChannelTypeOllamaCloud:
+		apiType = constant.APITypeOllamaCloud
+	case constant.ChannelTypeFreeModel:
+		apiType = constant.APITypeFreeModel
+	case constant.ChannelTypeNousResearch:
+		apiType = constant.APITypeNousResearch
 	}
 	if apiType == -1 {
 		// Task plugin channels are served by the task relay and must never

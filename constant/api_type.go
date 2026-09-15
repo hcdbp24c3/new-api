@@ -47,5 +47,9 @@ const (
 	APITypeStepFun
 	APITypeGroq
 	APITypeOpenCode
+	APITypeVolcEngineAPI
+	APITypeOllamaCloud
+	APITypeFreeModel
+	APITypeNousResearch
 	APITypeDummy // this one is only for count, do not add any channel after this
 )
