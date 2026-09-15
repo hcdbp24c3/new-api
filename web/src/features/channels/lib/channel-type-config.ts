@@ -206,6 +206,26 @@ export const CHANNEL_TYPE_CONFIGS: Record<number, ChannelTypeConfig> = {
       models: 'nvidia/llama-3.1-70b-instruct, nvidia/nemotron-3-ultra-550b',
     },
   },
+  67: {
+    id: 67,
+    name: CHANNEL_TYPES[67],
+    icon: 'StepFun',
+    hints: {
+      baseUrl: 'https://api.stepfun.com',
+      key: 'StepFun API key (sk-...)',
+      models: 'step-3.7-flash, step-3.5-flash',
+    },
+  },
+  68: {
+    id: 68,
+    name: CHANNEL_TYPES[68],
+    icon: 'Groq',
+    hints: {
+      baseUrl: 'https://api.groq.com/openai',
+      key: 'Groq API key (gsk_...)',
+      models: 'llama-3.3-70b-versatile, mixtral-8x7b-32768',
+    },
+  },
 }
 
 /**

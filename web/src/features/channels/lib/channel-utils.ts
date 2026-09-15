@@ -98,6 +98,8 @@ export function getChannelTypeIcon(type: number): string {
     64: 'Meta', // Meta AI
     65: 'SenseNova', // SenseNova
     66: 'Nvidia', // Nvidia
+    67: 'StepFun', // StepFun
+    68: 'Groq', // Groq
 
     // Image/Video generation
     2: 'Midjourney', // MjProxy

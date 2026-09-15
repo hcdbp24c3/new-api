@@ -64,6 +64,8 @@ const (
 	ChannelTypeMetaAI         = 64
 	ChannelTypeSenseNova      = 65
 	ChannelTypeNvidia         = 66
+	ChannelTypeStepFun        = 67
+	ChannelTypeGroq           = 68
 	ChannelTypeDummy          // this one is only for count, do not add any channel after this
 
 )
@@ -138,6 +140,8 @@ var ChannelBaseURLs = []string{
 	"https://api.meta.ai",                       //64
 	"https://token.sensenova.cn",                //65
 	"https://integrate.api.nvidia.com",          //66
+	"https://api.stepfun.com",                   //67
+	"https://api.groq.com/openai",               //68
 }
 
 func GetChannelBaseURL(channelType int) string {
@@ -211,6 +215,8 @@ var ChannelTypeNames = map[int]string{
 	ChannelTypeMetaAI:         "Meta AI",
 	ChannelTypeSenseNova:      "SenseNova",
 	ChannelTypeNvidia:         "Nvidia",
+	ChannelTypeStepFun:        "StepFun",
+	ChannelTypeGroq:           "Groq",
 }
 
 func GetChannelTypeName(channelType int) string {

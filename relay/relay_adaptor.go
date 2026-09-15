@@ -133,6 +133,10 @@ func GetAdaptor(apiType int) channel.Adaptor {
 		return &openai.Adaptor{}
 	case constant.APITypeNvidia:
 		return &openai.Adaptor{}
+	case constant.APITypeStepFun:
+		return &openai.Adaptor{}
+	case constant.APITypeGroq:
+		return &openai.Adaptor{}
 	}
 	return nil
 }
