@@ -369,6 +369,71 @@ func updateChannelMoonshotBalance(channel *model.Channel) (float64, error) {
 	return availableBalanceUsd, nil
 }
 
+func updateChannelStepFunBalance(channel *model.Channel) (float64, error) {
+	url := "https://api.stepfun.com/v1/accounts"
+	if channel.GetBaseURL() != "" {
+		url = channel.GetBaseURL()
+		if !strings.HasSuffix(url, "/v1") {
+			url = url + "/v1"
+		}
+		url = url + "/accounts"
+	}
+	body, err := GetResponseBody("GET", url, channel, GetAuthHeader(channel.Key))
+	if err != nil {
+		return 0, err
+	}
+	var response struct {
+		Object              string  `json:"object"`
+		Type                string  `json:"type"`
+		Balance             float64 `json:"balance"`
+		TotalCashBalance    float64 `json:"total_cash_balance"`
+		TotalVoucherBalance float64 `json:"total_voucher_balance"`
+	}
+	err = common.Unmarshal(body, &response)
+	if err != nil {
+		return 0, err
+	}
+	channel.UpdateBalance(response.Balance)
+	return response.Balance, nil
+}
+
+func updateChannelOpenCodeGoBalance(channel *model.Channel) (float64, error) {
+	url := "https://opencode.ai/zen/go/v1/usage"
+	body, err := GetResponseBody("GET", url, channel, GetAuthHeader(channel.Key))
+	if err != nil {
+		return 0, err
+	}
+	var response struct {
+		Usage struct {
+			Rolling struct {
+				Status   string  `json:"status"`
+				Percent  float64 `json:"percent"`
+				ResetsAt string  `json:"resetsAt"`
+			} `json:"rolling"`
+			Weekly struct {
+				Status   string  `json:"status"`
+				Percent  float64 `json:"percent"`
+				ResetsAt string  `json:"resetsAt"`
+			} `json:"weekly"`
+			Monthly struct {
+				Status   string  `json:"status"`
+				Percent  float64 `json:"percent"`
+				ResetsAt string  `json:"resetsAt"`
+			} `json:"monthly"`
+		} `json:"usage"`
+	}
+	err = common.Unmarshal(body, &response)
+	if err != nil {
+		return 0, err
+	}
+	// Return the average remaining percentage across all windows
+	avgRemaining := ((100 - response.Usage.Rolling.Percent) +
+		(100 - response.Usage.Weekly.Percent) +
+		(100 - response.Usage.Monthly.Percent)) / 3
+	channel.UpdateBalance(avgRemaining)
+	return avgRemaining, nil
+}
+
 func fetchAdvancedCustomBalance(channel *model.Channel) (channelBalanceResult, error) {
 	key := strings.TrimSpace(channel.Key)
 	info := &relaycommon.RelayInfo{
@@ -557,6 +622,13 @@ func updateStandardChannelBalance(channel *model.Channel) (float64, error) {
 		return updateChannelOpenRouterBalance(channel)
 	case constant.ChannelTypeMoonshot:
 		return updateChannelMoonshotBalance(channel)
+	case constant.ChannelTypeStepFun:
+		return updateChannelStepFunBalance(channel)
+	case constant.ChannelTypeGroq:
+		// Groq has no public balance API
+		return 0, errors.New("Groq does not expose a balance API")
+	case constant.ChannelTypeOpenCodeGo:
+		return updateChannelOpenCodeGoBalance(channel)
 	default:
 		return 0, errors.New("尚未实现")
 	}

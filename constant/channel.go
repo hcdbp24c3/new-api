@@ -66,6 +66,7 @@ const (
 	ChannelTypeNvidia         = 66
 	ChannelTypeStepFun        = 67
 	ChannelTypeGroq           = 68
+	ChannelTypeOpenCodeGo     = 69
 	ChannelTypeDummy          // this one is only for count, do not add any channel after this
 
 )
@@ -142,6 +143,7 @@ var ChannelBaseURLs = []string{
 	"https://integrate.api.nvidia.com",          //66
 	"https://api.stepfun.com",                   //67
 	"https://api.groq.com/openai",               //68
+	"https://opencode.ai/zen/go",                //69
 }
 
 func GetChannelBaseURL(channelType int) string {
@@ -217,6 +219,7 @@ var ChannelTypeNames = map[int]string{
 	ChannelTypeNvidia:         "Nvidia",
 	ChannelTypeStepFun:        "StepFun",
 	ChannelTypeGroq:           "Groq",
+	ChannelTypeOpenCodeGo:     "OpenCode Go",
 }
 
 func GetChannelTypeName(channelType int) string {

@@ -226,6 +226,16 @@ export const CHANNEL_TYPE_CONFIGS: Record<number, ChannelTypeConfig> = {
       models: 'llama-3.3-70b-versatile, mixtral-8x7b-32768',
     },
   },
+  69: {
+    id: 69,
+    name: CHANNEL_TYPES[69],
+    icon: 'OpenCode',
+    hints: {
+      baseUrl: 'https://opencode.ai/zen/go',
+      key: 'OpenCode API key (sk-...)',
+      models: 'gpt-5.6-luna, grok-4.6, deepseek-v4-pro, kimi-k3',
+    },
+  },
 }
 
 /**

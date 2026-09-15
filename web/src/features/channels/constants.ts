@@ -91,6 +91,7 @@ export const CHANNEL_TYPES = {
   66: 'Nvidia',
   67: 'StepFun',
   68: 'Groq',
+  69: 'OpenCode Go',
 } as const
 
 export type ChannelProviderPresentation = {
@@ -198,13 +199,17 @@ export const CHANNEL_PROVIDER_PRESENTATION: Partial<
     descriptionKey:
       'Access Groq high-speed inference with Llama, Mixtral and more (OpenAI-compatible)',
   },
+  69: {
+    descriptionKey:
+      'Access OpenCode Go subscription models including GPT, Grok, Kimi and more (OpenAI-compatible)',
+  },
 } satisfies Record<
   Exclude<keyof typeof CHANNEL_TYPES, 0 | typeof CHANNEL_TYPE_TASK_PLUGIN>,
   ChannelProviderPresentation
 >
 
 const CHANNEL_TYPE_DISPLAY_ORDER: number[] = [
-  1, 14, 24, 33, 43, 3, 41, 17, 45, 25, 26, 23, 48, 62, 63, 64, 65, 66, 67, 68, 60, 58, 59, 61, 42, 34, 20,
+  1, 14, 24, 33, 43, 3, 41, 17, 45, 25, 26, 23, 48, 62, 63, 64, 65, 66, 67, 68, 69, 60, 58, 59, 61, 42, 34, 20,
   4, 40, 27, 15, 46, 18, 31, 35, 49, 19, 47, 37, 38, 39, 11, 8, 57, 22, 21, 44,
   2, 5, 36, 50, 51, 52, 53, 54, 55, 56,
 ]
@@ -598,6 +603,10 @@ export const CHANNEL_BASE_URL_OPTIONS: Record<number, BaseURLOption[]> = {
     // Groq
     { value: 'https://api.groq.com/openai', label: 'Groq' },
   ],
+  69: [
+    // OpenCode Go
+    { value: 'https://opencode.ai/zen/go', label: 'OpenCode Go' },
+  ],
 }
 
 // ============================================================================
@@ -651,6 +660,7 @@ export const TYPE_TO_KEY_PROMPT: Record<number, string> = {
   66: 'Format: nvapi-... (Nvidia API key)',
   67: 'Format: sk-... (StepFun API key)',
   68: 'Format: gsk_... (Groq API key)',
+  69: 'Format: sk-... (OpenCode Zen or Go API key)',
 }
 
 export const CHANNEL_TYPE_WARNINGS: Record<number, string> = {

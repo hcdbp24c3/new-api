@@ -100,6 +100,7 @@ export function getChannelTypeIcon(type: number): string {
     66: 'Nvidia', // Nvidia
     67: 'StepFun', // StepFun
     68: 'Groq', // Groq
+    69: 'OpenCode', // OpenCode Go
 
     // Image/Video generation
     2: 'Midjourney', // MjProxy
