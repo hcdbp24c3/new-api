@@ -390,16 +390,12 @@ function PredefinedEndpointSelector({
   const { t } = useTranslation()
   const options = CHANNEL_BASE_URL_OPTIONS[type]
   const [selectedValue, setSelectedValue] = useState('')
-  const selectRef = useRef<HTMLButtonElement>(null)
 
   if (!options || options.length === 0) return null
 
   return (
     <div className='space-y-2'>
-      <label
-        className='text-sm font-medium leading-none cursor-pointer'
-        onClick={() => selectRef.current?.click()}
-      >
+      <label className='text-sm font-medium leading-none'>
         {t('API Endpoint')}
       </label>
       <Select
@@ -415,7 +411,7 @@ function PredefinedEndpointSelector({
         }}
         value={selectedValue}
       >
-        <SelectTrigger ref={selectRef}>
+        <SelectTrigger>
           <SelectValue placeholder={t('Select endpoint')} />
         </SelectTrigger>
         <SelectContent alignItemWithTrigger={false}>
