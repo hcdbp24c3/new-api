@@ -638,7 +638,7 @@ export const CHANNEL_BASE_URL_OPTIONS: Record<number, BaseURLOption[]> = {
 
 export const MODEL_FETCHABLE_TYPES = new Set([
   1, 4, 14, 17, 20, 23, 24, 25, 26, 27, 31, 34, 35, 40, 42, 43, 47, 48, 57, 58,
-  59, 60,
+  59, 60, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73,
 ])
 
 export const FIELD_PASSTHROUGH_TYPES = new Set([

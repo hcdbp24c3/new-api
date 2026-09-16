@@ -710,10 +710,11 @@ func updateAllChannelsBalance() error {
 		if channel.Status != common.ChannelStatusEnabled {
 			continue
 		}
-		// TODO: support Azure
-		//if channel.Type != common.ChannelTypeOpenAI && channel.Type != common.ChannelTypeCustom {
-		//	continue
-		//}
+		// Skip channels that have explicitly disabled auto-balance update
+		otherSettings := channel.GetOtherSettings()
+		if !otherSettings.AutoUpdateBalance {
+			continue
+		}
 		result, err := updateChannelBalance(channel)
 		if err != nil {
 			continue
@@ -723,6 +724,9 @@ func updateAllChannelsBalance() error {
 				service.DisableChannel(*types.NewChannelError(channel.Id, channel.Type, channel.Name, channel.ChannelInfo.IsMultiKey, "", channel.GetAutoBan()), "余额不足")
 			}
 		}
+		// Record last check time
+		otherSettings.AutoUpdateBalanceLastCheckTime = common.GetTimestamp()
+		channel.SetOtherSettings(otherSettings)
 		time.Sleep(common.RequestInterval)
 	}
 	return nil

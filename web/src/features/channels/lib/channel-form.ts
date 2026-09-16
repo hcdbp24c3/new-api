@@ -286,6 +286,8 @@ export const channelFormSchema = z
     upstream_model_update_ignored_models: z.string().optional(),
     // Per-channel model prefix (stored in settings JSON)
     model_prefix: z.string().optional(),
+    // Auto-update balance toggle
+    auto_update_balance: z.boolean().optional(),
   })
   .superRefine((data, ctx) => {
     if (
@@ -468,6 +470,7 @@ export const CHANNEL_FORM_DEFAULT_VALUES: ChannelFormValues = {
   upstream_model_update_ignored_models: '',
   advanced_custom: '',
   model_prefix: '',
+  auto_update_balance: false,
 }
 
 // ============================================================================
@@ -535,6 +538,7 @@ export function transformChannelToFormDefaults(
   let upstreamModelUpdateIgnoredModels = ''
   let advancedCustom = ''
   let modelPrefix = ''
+  let autoUpdateBalance = false
 
   if (channel.settings) {
     try {
@@ -564,6 +568,7 @@ export function transformChannelToFormDefaults(
         advancedCustom = stringifyAdvancedCustomConfig(parsed.advanced_custom)
       }
       modelPrefix = parsed.model_prefix || ''
+      autoUpdateBalance = parsed.auto_update_balance === true
     } catch (error) {
       // eslint-disable-next-line no-console
       console.error('Failed to parse channel settings:', error)
@@ -660,6 +665,7 @@ export function transformChannelToFormDefaults(
     upstream_model_update_ignored_models: upstreamModelUpdateIgnoredModels,
     advanced_custom: advancedCustom,
     model_prefix: modelPrefix,
+    auto_update_balance: autoUpdateBalance,
   }
 }
 
@@ -817,6 +823,12 @@ function buildSettingsJSON(formData: ChannelFormValues): string {
     if (typeof settingsObj.upstream_model_update_last_check_time !== 'number') {
       settingsObj.upstream_model_update_last_check_time = 0
     }
+  }
+
+  // Auto-update balance setting
+  settingsObj.auto_update_balance = formData.auto_update_balance === true
+  if (typeof settingsObj.auto_update_balance_last_check_time !== 'number') {
+    settingsObj.auto_update_balance_last_check_time = 0
   }
 
   if (formData.type === CHANNEL_TYPE_ADVANCED_CUSTOM) {

@@ -288,6 +288,7 @@ const SENSITIVE_FORM_FIELDS = [
   'allow_speed',
   'claude_beta_query',
   'disable_task_polling_sleep',
+  'auto_update_balance',
   'upstream_model_update_check_enabled',
   'upstream_model_update_auto_sync_enabled',
   'upstream_model_update_ignored_models',
@@ -373,9 +374,9 @@ function SubHeading(props: {
 }
 
 // ============================================================================
-// PredefinedEndpointSelector — visual-only endpoint picker
+// PredefinedEndpointSelector — endpoint picker that fills base_url
 // Shows friendly labels + actual URL as gray text inside base_url input.
-// Does NOT modify base_url value. Label click opens dropdown.
+// Selecting an option sets base_url value. Label click opens dropdown.
 // ============================================================================
 
 function PredefinedEndpointSelector({
@@ -1706,6 +1707,32 @@ if (isNewChannel) {
             <FormLabel>{t('Thinking to Content')}</FormLabel>
             <FormDescription>
               {t('Convert reasoning_content to <think> tag in content')}
+            </FormDescription>
+          </div>
+          <FormControl>
+            <Switch
+              disabled={sensitiveLocked}
+              checked={field.value}
+              onCheckedChange={field.onChange}
+            />
+          </FormControl>
+        </FormItem>
+      )}
+    />
+  )
+
+  const autoUpdateBalanceFields = (
+    <FormField
+      control={form.control}
+      name='auto_update_balance'
+      render={({ field }) => (
+        <FormItem className='flex items-center justify-between px-4 py-3'>
+          <div className='space-y-0.5'>
+            <FormLabel>{t('Auto-update balance')}</FormLabel>
+            <FormDescription>
+              {t(
+                'Periodically check and update the balance for this channel'
+              )}
             </FormDescription>
           </div>
           <FormControl>
@@ -3707,12 +3734,17 @@ if (isNewChannel) {
               />
             )}
 
-            {/* Predefined Base URL dropdown — visual selector only, does NOT modify base_url */}
+            {/* Predefined Base URL dropdown — selects endpoint and fills base_url */}
             {CHANNEL_BASE_URL_OPTIONS[currentType] && (
               <PredefinedEndpointSelector
                 type={currentType}
                 sensitiveLocked={sensitiveLocked}
-                onUrlChange={setSelectedEndpointUrl}
+                onUrlChange={(url) => {
+                  setSelectedEndpointUrl(url)
+                  if (url) {
+                    form.setValue('base_url', url, { shouldDirty: true })
+                  }
+                }}
               />
             )}
 
@@ -4303,6 +4335,7 @@ if (isNewChannel) {
                 className='space-y-4 disabled:opacity-60'
               >
                 {taskPollingFields}
+                {autoUpdateBalanceFields}
                 {proxyFields}
                 {httpProtocolFields}
                 {httpShardsFields}

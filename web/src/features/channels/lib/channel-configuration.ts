@@ -80,6 +80,7 @@ const CONFIGURATION_BLOCKS = {
       'http_protocol',
       'http2_connection_shards',
       'disable_task_polling_sleep',
+      'auto_update_balance',
     ],
   },
   upstreamModelDetection: {

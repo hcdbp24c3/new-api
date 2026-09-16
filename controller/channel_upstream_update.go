@@ -407,6 +407,17 @@ func fetchChannelUpstreamModelIDs(channel *model.Channel) ([]string, error) {
 		})), nil
 	}
 
+	if channel.Type == constant.ChannelTypeOllamaCloud {
+		key := strings.TrimSpace(strings.Split(channel.Key, "\n")[0])
+		models, err := ollama.FetchOllamaModels(baseURL, key)
+		if err != nil {
+			return nil, err
+		}
+		return normalizeModelNames(lo.Map(models, func(item ollama.OllamaModel, _ int) string {
+			return item.Name
+		})), nil
+	}
+
 	if channel.Type == constant.ChannelTypeGemini {
 		key, _, apiErr := channel.GetNextEnabledKey()
 		if apiErr != nil {
@@ -447,6 +458,8 @@ func fetchChannelUpstreamModelIDs(channel *model.Channel) ([]string, error) {
 		} else {
 			url = fmt.Sprintf("%s/api/v3/models", baseURL)
 		}
+	case constant.ChannelTypeVolcEngineAPI:
+		url = fmt.Sprintf("%s/models", baseURL)
 	case constant.ChannelTypeMoonshot:
 		if plan, ok := constant.ChannelSpecialBases[baseURL]; ok && plan.OpenAIBaseURL != "" {
 			url = fmt.Sprintf("%s/models", plan.OpenAIBaseURL)

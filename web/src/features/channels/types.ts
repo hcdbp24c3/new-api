@@ -112,6 +112,9 @@ export interface ChannelOtherSettings {
   advanced_custom?: AdvancedCustomConfig
   // Per-channel model prefix (stored in settings JSON)
   model_prefix?: string
+  // Auto-update balance toggle
+  auto_update_balance?: boolean
+  auto_update_balance_last_check_time?: number
 }
 
 export interface AdvancedCustomConfig {

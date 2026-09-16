@@ -91,6 +91,12 @@ type ChannelOtherSettings struct {
 	// rejection. Empty follows the default allow policy. Accepted values:
 	// "", "allow", "safe", "strict".
 	ToolLossPolicy string `json:"tool_loss_policy,omitempty"`
+	// AutoUpdateBalance enables periodic automatic balance checking for this
+	// channel. The system-level CHANNEL_UPDATE_FREQUENCY env var must also be
+	// set for the background task to run.
+	AutoUpdateBalance bool `json:"auto_update_balance,omitempty"`
+	// AutoUpdateBalanceLastCheckTime records the last auto-balance check time.
+	AutoUpdateBalanceLastCheckTime int64 `json:"auto_update_balance_last_check_time,omitempty"`
 }
 
 func (s *ChannelOtherSettings) IsOpenRouterEnterprise() bool {
