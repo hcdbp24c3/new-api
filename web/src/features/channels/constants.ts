@@ -554,81 +554,81 @@ export interface BaseURLOption {
 export const CHANNEL_BASE_URL_OPTIONS: Record<number, BaseURLOption[]> = {
   25: [
     // Moonshot / Kimi
-    { value: 'https://api.moonshot.cn', label: 'Moonshot (China)' },
+    { value: 'https://api.moonshot.cn', label: 'Moonshot CN' },
     { value: 'https://api.kimi.com', label: 'Kimi' },
-    { value: 'kimi-coding-plan', label: 'Kimi Coding Plan' },
+    { value: 'kimi-coding-plan', label: 'Kimi Coding' },
   ],
   26: [
     // Zhipu GLM V4
-    { value: 'https://open.bigmodel.cn', label: 'GLM (China)' },
-    { value: 'https://api.z.ai', label: 'GLM (International)' },
-    { value: 'glm-coding-plan', label: 'GLM Coding Plan (China)' },
+    { value: 'https://open.bigmodel.cn', label: 'GLM CN' },
+    { value: 'https://api.z.ai', label: 'GLM Intl' },
+    { value: 'glm-coding-plan', label: 'GLM Coding CN' },
     {
       value: 'glm-coding-plan-international',
-      label: 'GLM Coding Plan (International)',
+      label: 'GLM Coding Intl',
     },
   ],
   45: [
     // VolcEngine / Doubao
     {
       value: 'https://ark.cn-beijing.volces.com',
-      label: 'VolcEngine (China)',
+      label: 'VolcEngine CN',
     },
     {
       value: 'https://ark.ap-southeast.bytepluses.com',
-      label: 'VolcEngine (Singapore)',
+      label: 'VolcEngine SG',
     },
-    { value: 'doubao-coding-plan', label: 'Doubao Coding Plan' },
+    { value: 'doubao-coding-plan', label: 'Doubao Coding' },
   ],
   63: [
     // XiaomiMiMo
     {
       value: 'https://api.xiaomimimo.com',
-      label: 'XiaomiMiMo (Pay-as-you-go)',
+      label: 'MiMo PAYG',
     },
     {
       value: 'https://token-plan-cn.xiaomimimo.com',
-      label: 'XiaomiMiMo Token Plan (China)',
+      label: 'MiMo Token CN',
     },
     {
       value: 'https://token-plan-sgp.xiaomimimo.com',
-      label: 'XiaomiMiMo Token Plan (Singapore)',
+      label: 'MiMo Token SG',
     },
     {
       value: 'https://token-plan-ams.xiaomimimo.com',
-      label: 'XiaomiMiMo Token Plan (Europe)',
+      label: 'MiMo Token EU',
     },
   ],
   65: [
     // SenseNova
     {
       value: 'https://token.sensenova.cn',
-      label: 'SenseNova (China)',
+      label: 'SenseNova CN',
     },
     {
       value: 'https://token.sensenova.ai',
-      label: 'SenseNova (International)',
+      label: 'SenseNova Intl',
     },
   ],
   67: [
     // StepFun
-    { value: 'https://api.stepfun.com', label: 'StepFun (China)' },
-    { value: 'https://api.stepfun.ai', label: 'StepFun (International)' },
+    { value: 'https://api.stepfun.com', label: 'StepFun CN' },
+    { value: 'https://api.stepfun.ai', label: 'StepFun Intl' },
   ],
   69: [
     // OpenCode
-    { value: 'https://opencode.ai/zen/v1', label: 'OpenCode Zen (Pay-as-you-go)' },
-    { value: 'https://opencode.ai/zen/go/v1', label: 'OpenCode Go (Subscription)' },
+    { value: 'https://opencode.ai/zen/v1', label: 'Zen PAYG' },
+    { value: 'https://opencode.ai/zen/go/v1', label: 'Go Sub' },
   ],
   70: [
     // VolcEngine API
-    { value: 'https://ark.cn-beijing.volces.com/api/v3', label: 'VolcEngine Ark (China)' },
-    { value: 'https://ark.ap-southeast.bytepluses.com/api/v3', label: 'VolcEngine Ark (Singapore)' },
+    { value: 'https://ark.cn-beijing.volces.com/api/v3', label: 'Ark CN' },
+    { value: 'https://ark.ap-southeast.bytepluses.com/api/v3', label: 'Ark SG' },
   ],
   72: [
     // FreeModel
-    { value: 'https://api.freemodel.dev', label: 'FreeModel (OpenAI-compatible)' },
-    { value: 'https://cc.freemodel.dev', label: 'FreeModel (Anthropic-compatible)' },
+    { value: 'https://api.freemodel.dev', label: 'FreeModel OpenAI' },
+    { value: 'https://cc.freemodel.dev', label: 'FreeModel Claude' },
   ],
 }
 

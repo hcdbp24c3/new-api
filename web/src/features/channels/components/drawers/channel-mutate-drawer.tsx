@@ -374,9 +374,9 @@ function SubHeading(props: {
 }
 
 // ============================================================================
-// PredefinedEndpointSelector — endpoint picker that fills base_url
+// PredefinedEndpointSelector — visual-only endpoint picker
 // Shows friendly labels + actual URL as gray text inside base_url input.
-// Selecting an option sets base_url value. Label click opens dropdown.
+// Does NOT modify base_url value. Label click opens dropdown.
 // ============================================================================
 
 function PredefinedEndpointSelector({
@@ -412,14 +412,14 @@ function PredefinedEndpointSelector({
         }}
         value={selectedValue}
       >
-        <SelectTrigger>
+        <SelectTrigger className='[&_*[data-slot=select-value]]:line-clamp-none'>
           <SelectValue placeholder={t('Select endpoint')} />
         </SelectTrigger>
         <SelectContent alignItemWithTrigger={false}>
           <SelectGroup>
             {options.map((opt) => (
               <SelectItem key={opt.value} value={opt.value}>
-                {t(opt.label)}
+                <span className='whitespace-nowrap'>{t(opt.label)}</span>
               </SelectItem>
             ))}
           </SelectGroup>
@@ -3734,17 +3734,12 @@ if (isNewChannel) {
               />
             )}
 
-            {/* Predefined Base URL dropdown — selects endpoint and fills base_url */}
+            {/* Predefined Base URL dropdown — visual selector only, does NOT modify base_url */}
             {CHANNEL_BASE_URL_OPTIONS[currentType] && (
               <PredefinedEndpointSelector
                 type={currentType}
                 sensitiveLocked={sensitiveLocked}
-                onUrlChange={(url) => {
-                  setSelectedEndpointUrl(url)
-                  if (url) {
-                    form.setValue('base_url', url, { shouldDirty: true })
-                  }
-                }}
+                onUrlChange={setSelectedEndpointUrl}
               />
             )}
 
