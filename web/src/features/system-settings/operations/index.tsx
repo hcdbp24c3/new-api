@@ -56,6 +56,8 @@ const defaultOperationsSettings: OperationsSettings = {
   'perf_metrics_setting.flush_interval': 5,
   'perf_metrics_setting.bucket_time': 'hour',
   'perf_metrics_setting.retention_days': 0,
+  'model_dev_sync_setting.enabled': true,
+  'model_dev_sync_setting.sync_interval_hours': 24,
 }
 
 export function OperationsSettings() {

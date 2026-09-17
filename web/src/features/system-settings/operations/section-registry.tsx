@@ -16,6 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { ModelDevSyncSettingsSection } from './model-dev-sync-settings-section'
 import { SystemBehaviorSection } from '../general/system-behavior-section'
 import { EmailSettingsSection } from '../integrations/email-settings-section'
 import { MonitoringSettingsSection } from '../integrations/monitoring-settings-section'
@@ -123,6 +124,20 @@ const OPERATIONS_SECTIONS = [
             settings['performance_setting.monitor_memory_threshold'] ?? 90,
           'performance_setting.monitor_disk_threshold':
             settings['performance_setting.monitor_disk_threshold'] ?? 95,
+        }}
+      />
+    ),
+  },
+  {
+    id: 'model-dev-sync',
+    titleKey: 'models.dev Sync',
+    build: (settings: OperationsSettings) => (
+      <ModelDevSyncSettingsSection
+        defaultValues={{
+          'model_dev_sync_setting.enabled':
+            settings['model_dev_sync_setting.enabled'] ?? true,
+          'model_dev_sync_setting.sync_interval_hours':
+            settings['model_dev_sync_setting.sync_interval_hours'] ?? 24,
         }}
       />
     ),

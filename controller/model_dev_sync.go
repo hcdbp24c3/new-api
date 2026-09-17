@@ -17,6 +17,7 @@ import (
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
+	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 
 	"github.com/gin-gonic/gin"
@@ -453,9 +454,12 @@ func SyncModelsDevApply(c *gin.Context) {
 type modelDevSyncHandler struct{}
 
 func (modelDevSyncHandler) Type() string         { return model.SystemTaskTypeModelDevSync }
-func (modelDevSyncHandler) Enabled() bool        { return true }
-func (modelDevSyncHandler) Interval() time.Duration { return 24 * time.Hour }
-func (modelDevSyncHandler) NewPayload() any      { return nil }
+func (modelDevSyncHandler) Enabled() bool        { return operation_setting.IsModelDevSyncEnabled() }
+func (modelDevSyncHandler) Interval() time.Duration {
+	hours := operation_setting.GetModelDevSyncIntervalHours()
+	return time.Duration(hours * float64(time.Hour))
+}
+func (modelDevSyncHandler) NewPayload() any { return nil }
 
 func (h modelDevSyncHandler) Run(ctx context.Context, task *model.SystemTask, runnerID string) {
 	catalog, _, err := fetchModelDevCatalogWithContext(ctx)
