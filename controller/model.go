@@ -317,9 +317,27 @@ func ListModels(c *gin.Context, modelType int) {
 }
 
 func ChannelListModels(c *gin.Context) {
+	names := make([]string, 0, len(openAIModels))
+	for _, m := range openAIModels {
+		names = append(names, m.Id)
+	}
+	capabilities, err := model.GetModelCapabilitiesByNames(names)
+	if err != nil {
+		capabilities = map[string]model.ModelCapabilities{}
+	}
+	enriched := make([]dto.OpenAIModels, len(openAIModels))
+	for i, m := range openAIModels {
+		enriched[i] = m
+		if caps, ok := capabilities[m.Id]; ok {
+			enriched[i].ContextLength = caps.ContextLength
+			enriched[i].MaxOutputTokens = caps.MaxOutputTokens
+			enriched[i].Reasoning = caps.Reasoning
+			enriched[i].ToolCall = caps.ToolCall
+		}
+	}
 	c.JSON(200, gin.H{
 		"success": true,
-		"data":    openAIModels,
+		"data":    enriched,
 	})
 }
 

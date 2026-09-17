@@ -5590,6 +5590,7 @@
     "These plugins use this channel's connection settings.": "这些插件使用当前渠道的连接配置。",
     "These toggles affect whether certain request fields are passed through to the upstream provider.": "这些开关控制某些请求字段是否透传到上游服务。",
     "These values come from the source index and are shown for review only. The gateway admits the plugin based on the metadata compiled from its source.": "这些值来自源索引，仅供审查参考。网关的准入判定只依据从源码编译出的真实元数据。",
+    "Thinking": "思考",
     "Thinking Suffix Adapter": "思考后缀适配器",
     "Thinking to Content": "思维到内容",
     "Thinking...": "思考中...",

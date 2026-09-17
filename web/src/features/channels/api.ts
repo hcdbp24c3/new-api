@@ -649,7 +649,14 @@ export async function updateAllChannelsBalance(): Promise<{
 export async function getAllModels(): Promise<{
   success: boolean
   message?: string
-  data?: Array<{ id: string; [key: string]: unknown }>
+  data?: Array<{
+    id: string
+    context_length?: number
+    max_output_tokens?: number
+    reasoning?: boolean
+    tool_call?: boolean
+    [key: string]: unknown
+  }>
 }> {
   const res = await api.get('/api/channel/models')
   return res.data
