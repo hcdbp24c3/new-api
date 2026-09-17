@@ -36,6 +36,9 @@ import type {
   MetadataSyncRequest,
   DeploymentSettingsResponse,
   ListDeploymentsResponse,
+  ModelsDevSyncPreviewResponse,
+  ModelsDevSyncApplyResponse,
+  ModelsDevSyncRequest,
 } from './types'
 
 // ============================================================================
@@ -225,6 +228,28 @@ export async function previewUpstreamDiff(params?: {
     ? `/api/models/sync_upstream/preview?${queryString}`
     : '/api/models/sync_upstream/preview'
   const res = await api.get(url)
+  return res.data
+}
+
+// ============================================================================
+// Models.dev Sync Operations
+// ============================================================================
+
+/**
+ * Preview models.dev sync candidates
+ */
+export async function previewModelsDevSync(): Promise<ModelsDevSyncPreviewResponse> {
+  const res = await api.get('/api/models/model_dev_sync/preview')
+  return res.data
+}
+
+/**
+ * Apply models.dev sync
+ */
+export async function applyModelsDevSync(
+  params: ModelsDevSyncRequest
+): Promise<ModelsDevSyncApplyResponse> {
+  const res = await api.post('/api/models/model_dev_sync/apply', params)
   return res.data
 }
 

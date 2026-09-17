@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Plus, MoreHorizontal, List, AlertCircle } from 'lucide-react'
+import { Plus, MoreHorizontal, List, AlertCircle, Download } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
@@ -50,6 +50,10 @@ export function ModelsPrimaryButtons() {
     setOpen('sync-wizard')
   }
 
+  const handleModelsDevSync = () => {
+    setOpen('model-dev-sync')
+  }
+
   const handlePrefillGroups = () => {
     setOpen('prefill-groups')
   }
@@ -58,6 +62,10 @@ export function ModelsPrimaryButtons() {
     <div className='flex flex-wrap items-center gap-2'>
       <Button onClick={handleSync} variant='outline' size='sm'>
         {t('Sync metadata')}
+      </Button>
+      <Button onClick={handleModelsDevSync} variant='outline' size='sm'>
+        <Download className='mr-1 h-3.5 w-3.5' />
+        {t('Sync from models.dev')}
       </Button>
       {canPrice && (
         <Button

@@ -259,6 +259,56 @@ export interface PrefillGroupsResponse {
 }
 
 // ============================================================================
+// Models.dev Sync Types
+// ============================================================================
+
+export type ModelsDevSyncField = {
+  field: string
+  local: unknown
+  upstream: unknown
+}
+
+export type ModelsDevSyncCandidate = {
+  model_name: string
+  provider: string
+  kind: string // 'create' | 'update'
+  fields: ModelsDevSyncField[]
+}
+
+export type ModelsDevSyncPreview = {
+  source: { url: string; version: string }
+  candidates: ModelsDevSyncCandidate[]
+}
+
+export type ModelsDevSyncSelection = {
+  model_name: string
+  create: boolean
+  fields: string[]
+}
+
+export type ModelsDevSyncRequest = {
+  source_version: string
+  selections: ModelsDevSyncSelection[]
+}
+
+export type ModelsDevSyncResult = {
+  created_models: string[]
+  updated_models: string[]
+}
+
+export interface ModelsDevSyncPreviewResponse {
+  success: boolean
+  message?: string
+  data?: ModelsDevSyncPreview
+}
+
+export interface ModelsDevSyncApplyResponse {
+  success: boolean
+  message?: string
+  data?: ModelsDevSyncResult
+}
+
+// ============================================================================
 // Form Data Types
 // ============================================================================
 

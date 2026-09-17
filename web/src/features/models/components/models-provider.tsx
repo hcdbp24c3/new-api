@@ -41,6 +41,7 @@ type DialogType =
   | 'update-vendor'
   | 'missing-models'
   | 'sync-wizard'
+  | 'model-dev-sync'
   | 'prefill-groups'
   | 'description'
   | null
