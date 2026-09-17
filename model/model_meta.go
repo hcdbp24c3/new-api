@@ -52,6 +52,14 @@ type Model struct {
 	QuotaTypes    []int          `json:"quota_types,omitempty" gorm:"-"`
 	NameRule      int            `json:"name_rule" gorm:"default:0"`
 
+	ContextLength   int     `json:"context_length,omitempty" gorm:"default:0"`
+	MaxOutputTokens int     `json:"max_output_tokens,omitempty" gorm:"default:0"`
+	Reasoning       bool    `json:"reasoning" gorm:"default:false"`
+	ToolCall        bool    `json:"tool_call" gorm:"default:false"`
+	PricingInput    float64 `json:"pricing_input,omitempty" gorm:"default:0"`
+	PricingOutput   float64 `json:"pricing_output,omitempty" gorm:"default:0"`
+	PricingCache    float64 `json:"pricing_cache,omitempty" gorm:"default:0"`
+
 	MatchedModels []string `json:"matched_models,omitempty" gorm:"-"`
 	MatchedCount  int      `json:"matched_count,omitempty" gorm:"-"`
 
