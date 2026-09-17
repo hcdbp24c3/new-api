@@ -9,6 +9,10 @@ type OpenAIModels struct {
 	Created                int                  `json:"created"`
 	OwnedBy                string               `json:"owned_by"`
 	SupportedEndpointTypes []types.EndpointType `json:"supported_endpoint_types"`
+	ContextLength          int                  `json:"context_length,omitempty"`
+	MaxOutputTokens        int                  `json:"max_output_tokens,omitempty"`
+	Reasoning              bool                 `json:"reasoning,omitempty"`
+	ToolCall               bool                 `json:"tool_call,omitempty"`
 }
 
 type AnthropicModel struct {

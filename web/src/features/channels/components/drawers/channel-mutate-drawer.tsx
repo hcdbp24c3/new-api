@@ -723,6 +723,25 @@ export function ChannelMutateDrawer({
     [allModelsData]
   )
 
+  // Build model capabilities lookup map (context_length, reasoning, tool_call)
+  const modelCapabilitiesMap = useMemo(() => {
+    const map = new Map<
+      string,
+      { contextLength: number; reasoning: boolean; toolCall: boolean }
+    >()
+    for (const model of allModelsData?.data ?? []) {
+      if (!model.id) continue
+      if (model.context_length || model.reasoning || model.tool_call) {
+        map.set(model.id, {
+          contextLength: model.context_length ?? 0,
+          reasoning: model.reasoning ?? false,
+          toolCall: model.tool_call ?? false,
+        })
+      }
+    }
+    return map
+  }, [allModelsData])
+
   // Get basic models for the current channel type
   const basicModels = useMemo(() => {
     if (!allModelsList.length) return []
@@ -2891,6 +2910,63 @@ if (isNewChannel) {
                       copyChipOnClick
                     />
                   </FormControl>
+                  {currentModelsArray.length > 0 &&
+                    modelCapabilitiesMap.size > 0 && (
+                      <div className='flex flex-wrap gap-1.5'>
+                        {currentModelsArray.map((modelName) => {
+                          const caps = modelCapabilitiesMap.get(modelName)
+                          if (!caps) return null
+                          const badges: React.ReactNode[] = []
+                          if (caps.contextLength > 0) {
+                            const formatted =
+                              caps.contextLength >= 1_000_000
+                                ? `${Math.round(caps.contextLength / 1_000_000)}M`
+                                : `${Math.round(caps.contextLength / 1_000)}K`
+                            badges.push(
+                              <Badge
+                                key={`${modelName}-ctx`}
+                                variant='secondary'
+                                className='text-xs'
+                              >
+                                {formatted} {t('Context')}
+                              </Badge>
+                            )
+                          }
+                          if (caps.reasoning) {
+                            badges.push(
+                              <Badge
+                                key={`${modelName}-thinking`}
+                                className='border-purple-200 bg-purple-100 text-purple-700 dark:border-purple-500/40 dark:bg-purple-500/10 dark:text-purple-300'
+                              >
+                                {t('Thinking')}
+                              </Badge>
+                            )
+                          }
+                          if (caps.toolCall) {
+                            badges.push(
+                              <Badge
+                                key={`${modelName}-tools`}
+                                className='border-blue-200 bg-blue-100 text-blue-700 dark:border-blue-500/40 dark:bg-blue-500/10 dark:text-blue-300'
+                              >
+                                {t('Tools')}
+                              </Badge>
+                            )
+                          }
+                          if (badges.length === 0) return null
+                          return (
+                            <div
+                              key={modelName}
+                              className='flex items-center gap-1'
+                            >
+                              <span className='text-muted-foreground min-w-0 max-w-[120px] truncate text-xs'>
+                                {modelName}
+                              </span>
+                              {badges}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
                   {canBindTaskPlugin &&
                     canHavePluginExtensions &&
                     !showProviderPicker && (

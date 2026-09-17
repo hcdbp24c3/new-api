@@ -568,6 +568,39 @@ func parseModelStatusFilter(status string) (value int, ok bool) {
 	}
 }
 
+// ModelCapabilities holds the subset of model metadata used for channel
+// drawer badges. The map key is the exact model_name.
+type ModelCapabilities struct {
+	ContextLength   int  `json:"context_length"`
+	MaxOutputTokens int  `json:"max_output_tokens"`
+	Reasoning       bool `json:"reasoning"`
+	ToolCall        bool `json:"tool_call"`
+}
+
+// GetModelCapabilitiesByNames returns capability metadata for models matching
+// the given names. Only exact-match metadata records are considered; prefix
+// and contains rules are excluded so the result is deterministic.
+func GetModelCapabilitiesByNames(names []string) (map[string]ModelCapabilities, error) {
+	if len(names) == 0 {
+		return map[string]ModelCapabilities{}, nil
+	}
+	var models []Model
+	if err := DB.Select("model_name", "context_length", "max_output_tokens", "reasoning", "tool_call").
+		Where("model_name IN ?", names).Find(&models).Error; err != nil {
+		return nil, err
+	}
+	result := make(map[string]ModelCapabilities, len(models))
+	for i := range models {
+		result[models[i].ModelName] = ModelCapabilities{
+			ContextLength:   models[i].ContextLength,
+			MaxOutputTokens: models[i].MaxOutputTokens,
+			Reasoning:       models[i].Reasoning,
+			ToolCall:        models[i].ToolCall,
+		}
+	}
+	return result, nil
+}
+
 // parseModelSyncFilter maps UI/API sync values to the models.sync_official column.
 // Returns ok=false when no sync filter should be applied.
 func parseModelSyncFilter(syncOfficial string) (value int, ok bool) {
