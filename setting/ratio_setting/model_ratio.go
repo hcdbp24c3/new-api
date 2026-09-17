@@ -640,6 +640,21 @@ func ModelRatio2JSONString() string {
 	return modelRatioMap.MarshalJSONString()
 }
 
+// UpdateSingleModelRatio updates the in-memory model ratio for a single model.
+func UpdateSingleModelRatio(model string, ratio float64) {
+	modelRatioMap.Set(model, ratio)
+}
+
+// UpdateSingleCompletionRatio updates the in-memory completion ratio for a single model.
+func UpdateSingleCompletionRatio(model string, ratio float64) {
+	completionRatioMap.Set(model, ratio)
+}
+
+// UpdateSingleCacheRatio updates the in-memory cache ratio for a single model.
+func UpdateSingleCacheRatio(model string, ratio float64) {
+	cacheRatioMap.Set(model, ratio)
+}
+
 var defaultImageRatio = map[string]float64{
 	"gpt-image-1": 2,
 }

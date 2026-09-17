@@ -15,6 +15,7 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/setting/ratio_setting"
 
 	"github.com/gin-gonic/gin"
 )
@@ -418,6 +419,18 @@ func SyncModelsDevApply(c *gin.Context) {
 				return
 			}
 			updatedCount++
+
+			// Update runtime pricing maps from models.dev cost data.
+			// Cost values are $/1M tokens; ratio unit is $0.002/1K tokens (= $2/1M tokens).
+			if devModel.Cost.Input > 0 {
+				ratio_setting.UpdateSingleModelRatio(devModel.Id, devModel.Cost.Input/2.0)
+			}
+			if devModel.Cost.Output > 0 && devModel.Cost.Input > 0 {
+				ratio_setting.UpdateSingleCompletionRatio(devModel.Id, devModel.Cost.Output/devModel.Cost.Input)
+			}
+			if devModel.Cost.CacheRead > 0 && devModel.Cost.Input > 0 {
+				ratio_setting.UpdateSingleCacheRatio(devModel.Id, devModel.Cost.CacheRead/devModel.Cost.Input)
+			}
 		}
 	}
 
