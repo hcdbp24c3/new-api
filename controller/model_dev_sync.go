@@ -14,7 +14,9 @@ import (
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 
 	"github.com/gin-gonic/gin"
@@ -121,7 +123,16 @@ func getModelsDevHTTPClient() *http.Client {
 }
 
 func fetchModelDevCatalog(c *gin.Context) (*modelDevCatalog, string, error) {
-	ctx, cancel := context.WithTimeout(c.Request.Context(), time.Duration(common.GetEnvOrDefault("MODELS_DEV_HTTP_TIMEOUT_SECONDS", 15))*time.Second)
+	ctx := context.Background()
+	if c != nil {
+		ctx = c.Request.Context()
+	}
+	return fetchModelDevCatalogWithContext(ctx)
+}
+
+func fetchModelDevCatalogWithContext(ctx context.Context) (*modelDevCatalog, string, error) {
+	var cancel context.CancelFunc
+	ctx, cancel = context.WithTimeout(ctx, time.Duration(common.GetEnvOrDefault("MODELS_DEV_HTTP_TIMEOUT_SECONDS", 15))*time.Second)
 	defer cancel()
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, modelDevSyncURL, nil)
@@ -436,4 +447,92 @@ func SyncModelsDevApply(c *gin.Context) {
 
 	recordManageAudit(c, "model.models_dev.sync", map[string]any{"updated_count": updatedCount})
 	common.ApiSuccess(c, gin.H{"updated_count": updatedCount})
+}
+
+// modelDevSyncHandler runs the periodic models.dev catalog sync job.
+type modelDevSyncHandler struct{}
+
+func (modelDevSyncHandler) Type() string         { return model.SystemTaskTypeModelDevSync }
+func (modelDevSyncHandler) Enabled() bool        { return true }
+func (modelDevSyncHandler) Interval() time.Duration { return 24 * time.Hour }
+func (modelDevSyncHandler) NewPayload() any      { return nil }
+
+func (h modelDevSyncHandler) Run(ctx context.Context, task *model.SystemTask, runnerID string) {
+	catalog, _, err := fetchModelDevCatalogWithContext(ctx)
+	if err != nil {
+		finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusFailed, nil, err)
+		return
+	}
+
+	var allModels []*model.Model
+	if err := model.DB.Find(&allModels).Error; err != nil {
+		finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusFailed, nil, err)
+		return
+	}
+	var allVendors []*model.Vendor
+	if err := model.DB.Find(&allVendors).Error; err != nil {
+		finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusFailed, nil, err)
+		return
+	}
+
+	vendorByName := make(map[string]*model.Vendor, len(allVendors))
+	for _, v := range allVendors {
+		vendorByName[strings.ToLower(v.Name)] = v
+	}
+	modelByName := make(map[string]*model.Model, len(allModels))
+	for _, m := range allModels {
+		modelByName[m.ModelName] = m
+	}
+
+	updatedCount := 0
+	for _, provider := range catalog.Providers {
+		if _, vendorExists := vendorByName[strings.ToLower(provider.Name)]; !vendorExists {
+			continue
+		}
+		for _, devModel := range provider.Models {
+			local, modelExists := modelByName[devModel.Id]
+			if !modelExists {
+				continue
+			}
+
+			updates := map[string]any{}
+			if devModel.Limit.Context > 0 && local.ContextLength != devModel.Limit.Context {
+				updates["context_length"] = devModel.Limit.Context
+			}
+			if devModel.Limit.Output > 0 && local.MaxOutputTokens != devModel.Limit.Output {
+				updates["max_output_tokens"] = devModel.Limit.Output
+			}
+			if local.Reasoning != devModel.Reasoning {
+				updates["reasoning"] = devModel.Reasoning
+			}
+			if local.ToolCall != devModel.ToolCall {
+				updates["tool_call"] = devModel.ToolCall
+			}
+			if devModel.Cost.Input > 0 && local.PricingInput != devModel.Cost.Input {
+				updates["pricing_input"] = devModel.Cost.Input
+			}
+			if devModel.Cost.Output > 0 && local.PricingOutput != devModel.Cost.Output {
+				updates["pricing_output"] = devModel.Cost.Output
+			}
+			if devModel.Cost.CacheRead > 0 && local.PricingCache != devModel.Cost.CacheRead {
+				updates["pricing_cache"] = devModel.Cost.CacheRead
+			}
+
+			if len(updates) > 0 {
+				updates["updated_time"] = common.GetTimestamp()
+				if err := model.DB.Model(&model.Model{}).Where("id = ?", local.Id).Updates(updates).Error; err != nil {
+					logger.LogWarn(ctx, fmt.Sprintf("model_dev_sync: update %s failed: %v", devModel.Id, err))
+					continue
+				}
+				updatedCount++
+			}
+		}
+	}
+
+	result := map[string]any{"updated_count": updatedCount}
+	finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusSucceeded, result, nil)
+}
+
+func init() {
+	service.RegisterSystemTaskHandler(modelDevSyncHandler{})
 }

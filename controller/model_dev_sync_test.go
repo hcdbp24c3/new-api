@@ -3,6 +3,7 @@ package controller
 import (
 	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -129,4 +130,13 @@ func TestModelsDevSyncCandidateDiff(t *testing.T) {
 	assert.Equal(t, "context_length", candidate.Fields[0].Field)
 	assert.Equal(t, "max_output_tokens", candidate.Fields[1].Field)
 	assert.Equal(t, "pricing_input", candidate.Fields[2].Field)
+}
+
+func TestModelDevSyncHandler(t *testing.T) {
+	h := modelDevSyncHandler{}
+
+	assert.Equal(t, "model_dev_sync", h.Type())
+	assert.True(t, h.Enabled())
+	assert.Equal(t, 24*time.Hour, h.Interval())
+	assert.Nil(t, h.NewPayload())
 }
