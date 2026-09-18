@@ -282,6 +282,7 @@ export type ModelsDevSyncPreview = {
 
 export type ModelsDevSyncSelection = {
   model_name: string
+  provider: string
   create: boolean
   fields: string[]
 }

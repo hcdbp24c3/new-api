@@ -280,6 +280,7 @@ func SyncModelsDevPreview(c *gin.Context) {
 				ModelName: devModel.Id,
 				Provider:  providerKey,
 				Kind:      "unchanged",
+				Fields:    []modelsDevSyncField{},
 			}
 
 			if !vendorFound {

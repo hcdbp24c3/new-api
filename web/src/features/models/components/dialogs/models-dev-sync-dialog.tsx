@@ -129,7 +129,7 @@ export function ModelsDevSyncDialog(props: {
         id: 'fields',
         header: t('Changes'),
         cell: (row: ModelsDevSyncCandidate) =>
-          row.fields.map((f) => f.field).join(', '),
+          row.fields?.map((f) => f.field).join(', ') ?? '',
       },
       {
         id: 'select',
@@ -156,8 +156,9 @@ export function ModelsDevSyncDialog(props: {
       .filter((c) => selection[c.model_name])
       .map((c) => ({
         model_name: c.model_name,
+        provider: c.provider,
         create: c.kind === 'create',
-        fields: c.fields.map((f) => f.field),
+        fields: c.fields?.map((f) => f.field) ?? [],
       }))
     apply.mutate({
       source_version: preview.source.version,
@@ -177,44 +178,54 @@ export function ModelsDevSyncDialog(props: {
     props.onOpenChange(open)
   }
 
+  function renderFooter() {
+    if (step === 'select') {
+      return (
+        <>
+          <Button
+            variant='outline'
+            onClick={() => handleOpenChange(false)}
+            disabled={apply.isPending}
+          >
+            {t('Cancel')}
+          </Button>
+          <Button
+            onClick={handleApply}
+            disabled={selectedCount === 0 || apply.isPending}
+          >
+            {apply.isPending
+              ? t('Syncing...')
+              : t('Sync {{count}} models', { count: selectedCount })}
+          </Button>
+        </>
+      )
+    }
+
+    if (step === 'results') {
+      return (
+        <Button onClick={() => handleOpenChange(false)}>
+          {t('Close')}
+        </Button>
+      )
+    }
+
+    return (
+      <Button
+        onClick={() => load.mutate()}
+        disabled={load.isPending}
+      >
+        {load.isPending ? t('Loading...') : t('Load models.dev data')}
+      </Button>
+    )
+  }
+
   return (
     <Dialog
       open={props.open}
       onOpenChange={handleOpenChange}
       title={t('Sync from models.dev')}
       description={t('Fetch model capabilities and pricing from models.dev')}
-      footer={
-        step === 'select' ? (
-          <>
-            <Button
-              variant='outline'
-              onClick={() => handleOpenChange(false)}
-              disabled={apply.isPending}
-            >
-              {t('Cancel')}
-            </Button>
-            <Button
-              onClick={handleApply}
-              disabled={selectedCount === 0 || apply.isPending}
-            >
-              {apply.isPending
-                ? t('Syncing...')
-                : t('Sync {{count}} models', { count: selectedCount })}
-            </Button>
-          </>
-        ) : step === 'results' ? (
-          <Button onClick={() => handleOpenChange(false)}>
-            {t('Close')}
-          </Button>
-        ) : (
-          <Button
-            onClick={() => load.mutate()}
-            disabled={load.isPending}
-          >
-            {load.isPending ? t('Loading...') : t('Load models.dev data')}
-          </Button>
-        )
-      }
+      footer={renderFooter()}
     >
       {step === 'preview' && !load.isPending && !load.isError && (
         <EmptyState

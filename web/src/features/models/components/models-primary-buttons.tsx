@@ -60,10 +60,10 @@ export function ModelsPrimaryButtons() {
 
   return (
     <div className='flex flex-wrap items-center gap-2'>
-      <Button onClick={handleSync} variant='outline' size='sm'>
+      <Button onClick={handleSync} variant='outline' size='sm' className='hidden sm:inline-flex'>
         {t('Sync metadata')}
       </Button>
-      <Button onClick={handleModelsDevSync} variant='outline' size='sm'>
+      <Button onClick={handleModelsDevSync} variant='outline' size='sm' className='hidden sm:inline-flex'>
         <Download className='mr-1 h-3.5 w-3.5' />
         {t('Sync from models.dev')}
       </Button>
@@ -72,6 +72,7 @@ export function ModelsPrimaryButtons() {
           onClick={() => setOpen('price-sync')}
           variant='outline'
           size='sm'
+          className='hidden sm:inline-flex'
         >
           {t('Sync pricing')}
         </Button>
@@ -79,7 +80,8 @@ export function ModelsPrimaryButtons() {
       {/* Create Model */}
       <Button onClick={handleCreateModel} size='sm'>
         <Plus className='h-4 w-4' />
-        {t('Add Model')}
+        <span className='hidden sm:inline'>{t('Add Model')}</span>
+        <span className='sm:hidden'>{t('Add')}</span>
       </Button>
 
       {/* More Actions */}
@@ -92,6 +94,35 @@ export function ModelsPrimaryButtons() {
           <MoreHorizontal className='h-4 w-4' />
         </DropdownMenuTrigger>
         <DropdownMenuContent align='end' className='w-56'>
+          {/* Mobile: show hidden sync buttons in dropdown */}
+          <DropdownMenuItem onClick={handleSync} className='sm:hidden'>
+            {t('Sync metadata')}
+            <DropdownMenuShortcut>
+              <Download className='h-4 w-4' />
+            </DropdownMenuShortcut>
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={handleModelsDevSync} className='sm:hidden'>
+            {t('Sync from models.dev')}
+            <DropdownMenuShortcut>
+              <Download className='h-4 w-4' />
+            </DropdownMenuShortcut>
+          </DropdownMenuItem>
+          {canPrice && (
+            <DropdownMenuItem onClick={() => setOpen('price-sync')} className='sm:hidden'>
+              {t('Sync pricing')}
+              <DropdownMenuShortcut>
+                <Download className='h-4 w-4' />
+              </DropdownMenuShortcut>
+            </DropdownMenuItem>
+          )}
+          <DropdownMenuItem className='sm:hidden' onClick={handleCreateModel}>
+            {t('Add Model')}
+            <DropdownMenuShortcut>
+              <Plus className='h-4 w-4' />
+            </DropdownMenuShortcut>
+          </DropdownMenuItem>
+          <DropdownMenuSeparator className='sm:hidden' />
+
           <DropdownMenuItem onClick={handleMissingModels}>
             {t('Missing Models')}
             <DropdownMenuShortcut>
