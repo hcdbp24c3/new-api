@@ -374,23 +374,45 @@ function SubHeading(props: {
 }
 
 // ============================================================================
-// PredefinedEndpointSelector — visual-only endpoint picker
-// Shows friendly labels + actual URL as gray text inside base_url input.
-// Does NOT modify base_url value. Label click opens dropdown.
+// BaseURLSelector — generic endpoint picker for channel types with predefined URLs
+// Renders a Select with predefined endpoints + custom option.
+// Selecting a predefined endpoint sets the base_url form value directly.
+// Selecting "Custom URL" clears base_url so the user can type manually.
 // ============================================================================
 
-function PredefinedEndpointSelector({
+const CUSTOM_URL_VALUE = '__custom__'
+
+function BaseURLSelector({
   type,
   sensitiveLocked,
-  onUrlChange,
+  baseValue,
+  onBaseUrlChange,
 }: {
   type: number
   sensitiveLocked: boolean
-  onUrlChange: (url: string) => void
+  baseValue: string
+  onBaseUrlChange: (url: string) => void
 }) {
   const { t } = useTranslation()
   const options = CHANNEL_BASE_URL_OPTIONS[type]
-  const [selectedValue, setSelectedValue] = useState('')
+
+  const selectItems = useMemo(() => {
+    if (!options) return []
+    return [
+      ...options.map((opt) => ({
+        value: opt.value,
+        label: t(opt.label),
+      })),
+      { value: CUSTOM_URL_VALUE, label: t('Custom URL') },
+    ]
+  }, [options, t])
+
+  const resolvedValue = useMemo(() => {
+    if (!options) return ''
+    if (options.some((opt) => opt.value === baseValue)) return baseValue
+    if (baseValue && baseValue !== '') return CUSTOM_URL_VALUE
+    return ''
+  }, [options, baseValue])
 
   if (!options || options.length === 0) return null
 
@@ -401,25 +423,25 @@ function PredefinedEndpointSelector({
       </label>
       <Select
         disabled={sensitiveLocked}
-        items={options.map((opt) => ({
-          value: opt.value,
-          label: t(opt.label),
-        }))}
+        items={selectItems}
         onValueChange={(val) => {
           const v = val ?? ''
-          setSelectedValue(v)
-          onUrlChange(v)
+          if (v === CUSTOM_URL_VALUE) {
+            onBaseUrlChange('')
+          } else {
+            onBaseUrlChange(v)
+          }
         }}
-        value={selectedValue}
+        value={resolvedValue}
       >
         <SelectTrigger className='[&_*[data-slot=select-value]]:line-clamp-none'>
           <SelectValue placeholder={t('Select endpoint')} />
         </SelectTrigger>
         <SelectContent alignItemWithTrigger={false}>
           <SelectGroup>
-            {options.map((opt) => (
-              <SelectItem key={opt.value} value={opt.value}>
-                <span className='whitespace-nowrap'>{t(opt.label)}</span>
+            {selectItems.map((item) => (
+              <SelectItem key={item.value} value={item.value}>
+                <span className='whitespace-nowrap'>{item.label}</span>
               </SelectItem>
             ))}
           </SelectGroup>
@@ -582,11 +604,8 @@ export function ChannelMutateDrawer({
   const keyMode = formValues.key_mode
   const currentGroups = formValues.group
   const currentType = formValues.type
-  const [selectedEndpointUrl, setSelectedEndpointUrl] = useState('')
   const baseUrlPlaceholder =
-    selectedEndpointUrl ||
-    defaultBaseURLs?.[currentType] ||
-    t(FIELD_PLACEHOLDERS.BASE_URL)
+    defaultBaseURLs?.[currentType] || t(FIELD_PLACEHOLDERS.BASE_URL)
   const currentStatus = formValues.status
   const currentBaseUrl = formValues.base_url
   const currentTaskPluginKey = formValues.task_plugin_key
@@ -595,11 +614,6 @@ export function ChannelMutateDrawer({
   const currentModelMapping = formValues.model_mapping
   const awsKeyType = formValues.aws_key_type
   const vertexKeyType = formValues.vertex_key_type
-
-  // Reset endpoint selection when channel type changes
-  useEffect(() => {
-    setSelectedEndpointUrl('')
-  }, [currentType])
   const upstreamModelUpdateCheckEnabled =
     formValues.upstream_model_update_check_enabled
   const currentSettings = formValues.settings
@@ -1073,11 +1087,15 @@ if (isNewChannel) {
   useEffect(() => {
     if (isEditing) return // Don't auto-set defaults when editing
 
-    // Type 45 (VolcEngine) - set default base_url
-    if (currentType === 45) {
+    // Auto-select first predefined base URL when type has predefined options
+    const predefinedOptions = CHANNEL_BASE_URL_OPTIONS[currentType]
+    if (predefinedOptions && predefinedOptions.length > 0) {
       const currentBaseUrlValue = form.getValues('base_url')
       if (!currentBaseUrlValue || currentBaseUrlValue === '') {
-        form.setValue('base_url', 'https://ark.cn-beijing.volces.com')
+        form.setValue('base_url', predefinedOptions[0].value, {
+          shouldDirty: false,
+          shouldValidate: true,
+        })
       }
     }
 
@@ -3810,12 +3828,18 @@ if (isNewChannel) {
               />
             )}
 
-            {/* Predefined Base URL dropdown — visual selector only, does NOT modify base_url */}
+            {/* Base URL selector — renders Select when predefined URLs exist */}
             {CHANNEL_BASE_URL_OPTIONS[currentType] && (
-              <PredefinedEndpointSelector
+              <BaseURLSelector
                 type={currentType}
                 sensitiveLocked={sensitiveLocked}
-                onUrlChange={setSelectedEndpointUrl}
+                baseValue={currentBaseUrl ?? ''}
+                onBaseUrlChange={(url) =>
+                  form.setValue('base_url', url, {
+                    shouldDirty: true,
+                    shouldValidate: true,
+                  })
+                }
               />
             )}
 
