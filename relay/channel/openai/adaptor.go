@@ -35,6 +35,7 @@ import (
 	"github.com/samber/lo"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 type Adaptor struct {
@@ -237,6 +238,21 @@ func (a *Adaptor) SetupRequestHeader(c *gin.Context, header *http.Header, info *
 		}
 		if header.Get("X-OpenRouter-Title") == "" {
 			header.Set("X-OpenRouter-Title", "New API")
+		}
+	}
+	if info.ChannelType == constant.ChannelTypeOpenCode {
+		// OpenCode Go provider requires x-opencode-session header (enforced since 2026-09-06).
+		// The gateway only checks header existence, not value format.
+		if header.Get("x-opencode-session") == "" {
+			header.Set("x-opencode-session", uuid.New().String())
+		}
+		if header.Get("x-opencode-client") == "" {
+			header.Set("x-opencode-client", "new-api")
+		}
+		// Free tier requires User-Agent: opencode/<version>.
+		// Paid keys bypass UA gating, so this is safe for both tiers.
+		if header.Get("User-Agent") == "" {
+			header.Set("User-Agent", "opencode/1.1.1")
 		}
 	}
 	return nil
