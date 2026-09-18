@@ -172,6 +172,11 @@ func (a *Adaptor) GetRequestURL(info *relaycommon.RelayInfo) (string, error) {
 		url := info.ChannelBaseUrl
 		url = strings.Replace(url, "{model}", info.UpstreamModelName, -1)
 		return url, nil
+	case constant.ChannelTypeOpenCode:
+		// OpenCode base URLs already include /v1 (e.g. https://opencode.ai/zen/v1
+		// or https://opencode.ai/zen/go/v1). Append /chat/completions directly to
+		// avoid the double-/v1 caused by RequestURLPath being /v1/chat/completions.
+		return fmt.Sprintf("%s/chat/completions", info.ChannelBaseUrl), nil
 	default:
 		if (info.RelayFormat == types.RelayFormatClaude || info.RelayFormat == types.RelayFormatGemini) &&
 			info.RelayMode != relayconstant.RelayModeResponses &&
