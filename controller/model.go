@@ -272,6 +272,25 @@ func ListModels(c *gin.Context, modelType int) {
 		userOpenAiModels = append(userOpenAiModels, buildOpenAIModel(modelName, ownerByModel))
 	}
 
+	// Enrich with capability data from database (context_length, reasoning, etc.)
+	// so API clients (OpenMinis, Cherry Studio, etc.) can discover model capabilities.
+	if len(userOpenAiModels) > 0 {
+		capNames := make([]string, len(userOpenAiModels))
+		for i, m := range userOpenAiModels {
+			capNames[i] = m.Id
+		}
+		if capabilities, err := model.GetModelCapabilitiesByNames(capNames); err == nil {
+			for i, m := range userOpenAiModels {
+				if caps, ok := capabilities[m.Id]; ok {
+					userOpenAiModels[i].ContextLength = caps.ContextLength
+					userOpenAiModels[i].MaxOutputTokens = caps.MaxOutputTokens
+					userOpenAiModels[i].Reasoning = caps.Reasoning
+					userOpenAiModels[i].ToolCall = caps.ToolCall
+				}
+			}
+		}
+	}
+
 	switch modelType {
 	case constant.ChannelTypeAnthropic:
 		useranthropicModels := make([]dto.AnthropicModel, len(userOpenAiModels))
@@ -367,6 +386,15 @@ func EnabledListModels(c *gin.Context) {
 func RetrieveModel(c *gin.Context, modelType int) {
 	modelId := c.Param("model")
 	if aiModel, ok := openAIModelsMap[modelId]; ok {
+		// Enrich with capability data from database.
+		if capabilities, err := model.GetModelCapabilitiesByNames([]string{modelId}); err == nil {
+			if caps, ok := capabilities[modelId]; ok {
+				aiModel.ContextLength = caps.ContextLength
+				aiModel.MaxOutputTokens = caps.MaxOutputTokens
+				aiModel.Reasoning = caps.Reasoning
+				aiModel.ToolCall = caps.ToolCall
+			}
+		}
 		switch modelType {
 		case constant.ChannelTypeAnthropic:
 			c.JSON(200, dto.AnthropicModel{
