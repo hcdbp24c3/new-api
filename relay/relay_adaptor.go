@@ -41,6 +41,7 @@ import (
 	"github.com/QuantumNous/new-api/relay/channel/vertex"
 	"github.com/QuantumNous/new-api/relay/channel/volcengine"
 	"github.com/QuantumNous/new-api/relay/channel/xai"
+	"github.com/QuantumNous/new-api/relay/channel/xiaomi"
 	"github.com/QuantumNous/new-api/relay/channel/xunfei"
 	"github.com/QuantumNous/new-api/relay/channel/zhipu"
 	"github.com/QuantumNous/new-api/relay/channel/zhipu_4v"
@@ -126,7 +127,7 @@ func GetAdaptor(apiType int) channel.Adaptor {
 	case constant.APITypeHuggingFace:
 		return &openai.Adaptor{}
 	case constant.APITypeXiaomiMiMo:
-		return &openai.Adaptor{}
+		return &xiaomi.Adaptor{}
 	case constant.APITypeMetaAI:
 		return &openai.Adaptor{}
 	case constant.APITypeSenseNova:
