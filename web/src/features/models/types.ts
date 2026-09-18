@@ -293,8 +293,7 @@ export type ModelsDevSyncRequest = {
 }
 
 export type ModelsDevSyncResult = {
-  created_models: string[]
-  updated_models: string[]
+  updated_count: number
 }
 
 export interface ModelsDevSyncPreviewResponse {

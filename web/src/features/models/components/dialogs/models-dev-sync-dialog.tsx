@@ -54,8 +54,7 @@ export function ModelsDevSyncDialog(props: {
   const [step, setStep] = useState<Step>('preview')
   const [selection, setSelection] = useState<Record<string, boolean>>({})
   const [results, setResults] = useState<{
-    created: string[]
-    updated: string[]
+    updated_count: number
   } | null>(null)
 
   const load = useMutation({
@@ -98,7 +97,7 @@ export function ModelsDevSyncDialog(props: {
       await queryClient.invalidateQueries({ queryKey: ['models'] })
       await queryClient.invalidateQueries({ queryKey: ['vendors'] })
       await queryClient.invalidateQueries({ queryKey: ['pricing'] })
-      setResults({ created: data.created_models, updated: data.updated_models })
+      setResults({ updated_count: data.updated_count })
       setStep('results')
     },
     onError: (error) => handleServerError(error),
@@ -283,27 +282,13 @@ export function ModelsDevSyncDialog(props: {
 
       {step === 'results' && results && (
         <div className='space-y-4'>
-          {results.created.length > 0 && (
+          {results.updated_count > 0 ? (
             <div>
-              <h4 className='font-medium'>{t('Created')}</h4>
-              <ul className='text-muted-foreground mt-1 list-inside list-disc text-sm'>
-                {results.created.map((m) => (
-                  <li key={m}>{m}</li>
-                ))}
-              </ul>
+              <h4 className='font-medium'>
+                {t('Updated {{count}} models', { count: results.updated_count })}
+              </h4>
             </div>
-          )}
-          {results.updated.length > 0 && (
-            <div>
-              <h4 className='font-medium'>{t('Updated')}</h4>
-              <ul className='text-muted-foreground mt-1 list-inside list-disc text-sm'>
-                {results.updated.map((m) => (
-                  <li key={m}>{m}</li>
-                ))}
-              </ul>
-            </div>
-          )}
-          {results.created.length === 0 && results.updated.length === 0 && (
+          ) : (
             <EmptyState description={t('No changes applied')} />
           )}
         </div>
