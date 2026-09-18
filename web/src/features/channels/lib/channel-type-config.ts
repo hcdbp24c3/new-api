@@ -165,6 +165,10 @@ export const CHANNEL_TYPE_CONFIGS: Record<number, ChannelTypeConfig> = {
       key: 'HuggingFace access token (hf_...)',
       models: 'provider/model-name:policy (e.g., openai/gpt-oss-120b:fastest)',
     },
+    validation: {
+      keyFormat: /^hf_/,
+      keyMinLength: 10,
+    },
   },
   63: {
     id: 63,
@@ -174,6 +178,10 @@ export const CHANNEL_TYPE_CONFIGS: Record<number, ChannelTypeConfig> = {
       baseUrl: 'https://api.xiaomimimo.com',
       key: 'API key (sk-...) or Token Plan key (tp-...)',
       models: 'mimo-v2.5-pro, mimo-v2.5-flash',
+    },
+    validation: {
+      keyFormat: /^(sk-|tp-)/,
+      keyMinLength: 10,
     },
   },
   64: {
