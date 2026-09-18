@@ -29,6 +29,7 @@ import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { handleServerError } from '@/lib/handle-server-error'
 import { createServerError } from '@/lib/server-error-message'
+import { toast } from 'sonner'
 
 import { previewModelsDevSync, applyModelsDevSync } from '../../api'
 import type {
@@ -100,7 +101,28 @@ export function ModelsDevSyncDialog(props: {
       setResults({ updated_count: data.updated_count })
       setStep('results')
     },
-    onError: (error) => handleServerError(error),
+    onError: async (error: any) => {
+      // If upstream catalog changed (409), auto re-fetch preview
+      if (error?.response?.status === 409 || error?.message?.includes('Upstream catalog changed')) {
+        toast.info(t('Catalog updated, re-fetching...'))
+        try {
+          const response = await previewModelsDevSync()
+          if (response.success && response.data) {
+            setPreview(response.data)
+            const sel: Record<string, boolean> = {}
+            for (const c of response.data.candidates) {
+              sel[c.model_name] = selection[c.model_name] ?? true
+            }
+            setSelection(sel)
+            setStep('select')
+            return
+          }
+        } catch {
+          // fall through to default error handling
+        }
+      }
+      handleServerError(error)
+    },
   })
 
   const candidates = preview?.candidates ?? []
