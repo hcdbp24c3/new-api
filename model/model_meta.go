@@ -188,7 +188,7 @@ func GetConfiguredModelChannels() (map[string][]int, error) {
 	}
 	configured := make(map[string][]int)
 	for _, channel := range channels {
-		prefix := extractModelPrefix(channel.OtherSettings)
+		prefix := ExtractModelPrefix(channel.OtherSettings)
 		for _, name := range normalizeLookupValues(channel.GetModels()) {
 			bare := name
 			if prefix != "" {
@@ -438,7 +438,7 @@ func GetModelConnections() ([]ModelConnection, error) {
 		return nil, err
 	}
 	for i := range connections {
-		prefix := extractModelPrefix(connections[i].OtherSettings)
+		prefix := ExtractModelPrefix(connections[i].OtherSettings)
 		if prefix != "" {
 			connections[i].BareModel = strings.TrimPrefix(connections[i].Model, prefix+"/")
 		} else {
@@ -449,8 +449,8 @@ func GetModelConnections() ([]ModelConnection, error) {
 	return connections, nil
 }
 
-// extractModelPrefix parses other_settings JSON and returns the model_prefix field.
-func extractModelPrefix(raw string) string {
+// ExtractModelPrefix parses other_settings JSON and returns the model_prefix field.
+func ExtractModelPrefix(raw string) string {
 	if raw == "" {
 		return ""
 	}
@@ -580,22 +580,76 @@ type ModelCapabilities struct {
 // GetModelCapabilitiesByNames returns capability metadata for models matching
 // the given names. Only exact-match metadata records are considered; prefix
 // and contains rules are excluded so the result is deterministic.
+//
+// Channel model_prefix settings cause channel model names to include a prefix
+// (e.g. "deepseek/deepseek-flash") while the models metadata table stores the
+// bare name ("deepseek-flash"). This function strips known channel prefixes
+// before querying so that capability lookups succeed regardless of prefix.
 func GetModelCapabilitiesByNames(names []string) (map[string]ModelCapabilities, error) {
 	if len(names) == 0 {
 		return map[string]ModelCapabilities{}, nil
 	}
-	var models []Model
-	if err := DB.Select("model_name", "context_length", "max_output_tokens", "reasoning", "tool_call").
-		Where("model_name IN ?", names).Find(&models).Error; err != nil {
+
+	// Collect all channel model_prefix values so we can strip them.
+	var channels []Channel
+	if err := DB.Select("settings").Find(&channels).Error; err != nil {
 		return nil, err
 	}
+	prefixSet := make(map[string]struct{})
+	for _, ch := range channels {
+		if p := ExtractModelPrefix(ch.OtherSettings); p != "" {
+			prefixSet[p+"/"] = struct{}{}
+		}
+	}
+
+	// Build query set: original names plus bare (prefix-stripped) variants.
+	querySet := make(map[string]struct{}, len(names)*2)
+	for _, name := range names {
+		querySet[name] = struct{}{}
+		for prefix := range prefixSet {
+			if bare, ok := strings.CutPrefix(name, prefix); ok && bare != "" {
+				querySet[bare] = struct{}{}
+			}
+		}
+	}
+	queryNames := make([]string, 0, len(querySet))
+	for n := range querySet {
+		queryNames = append(queryNames, n)
+	}
+
+	var models []Model
+	if err := DB.Select("model_name", "context_length", "max_output_tokens", "reasoning", "tool_call").
+		Where("model_name IN ?", queryNames).Find(&models).Error; err != nil {
+		return nil, err
+	}
+
+	// Build a reverse map from bare name to prefixed names so we can return
+	// capabilities under the caller's original key.
+	bareToOriginals := make(map[string][]string)
+	for _, name := range names {
+		bareToOriginals[name] = append(bareToOriginals[name], name)
+		for prefix := range prefixSet {
+			if bare, ok := strings.CutPrefix(name, prefix); ok && bare != "" {
+				bareToOriginals[bare] = append(bareToOriginals[bare], name)
+			}
+		}
+	}
+
 	result := make(map[string]ModelCapabilities, len(models))
 	for i := range models {
-		result[models[i].ModelName] = ModelCapabilities{
+		caps := ModelCapabilities{
 			ContextLength:   models[i].ContextLength,
 			MaxOutputTokens: models[i].MaxOutputTokens,
 			Reasoning:       models[i].Reasoning,
 			ToolCall:        models[i].ToolCall,
+		}
+		// Map back to all original (possibly prefixed) names.
+		if originals, ok := bareToOriginals[models[i].ModelName]; ok {
+			for _, orig := range originals {
+				result[orig] = caps
+			}
+		} else {
+			result[models[i].ModelName] = caps
 		}
 	}
 	return result, nil

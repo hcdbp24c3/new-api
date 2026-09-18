@@ -263,6 +263,33 @@ func SyncModelsDevPreview(c *gin.Context) {
 		modelByName[m.ModelName] = m
 	}
 
+	// Build a prefix-aware lookup: bare models.dev IDs → channel prefixed names.
+	// When a channel has model_prefix "deepseek", its models are stored as
+	// "deepseek/deepseek-flash" in the DB but models.dev catalog uses "deepseek-flash".
+	// We collect all channel prefixes and build a lookup that tries both variants.
+	var syncChannels []model.Channel
+	_ = model.DB.Select("settings").Find(&syncChannels)
+	channelPrefixSet := make(map[string]struct{})
+	for _, ch := range syncChannels {
+		if p := model.ExtractModelPrefix(ch.OtherSettings); p != "" {
+			channelPrefixSet[p+"/"] = struct{}{}
+		}
+	}
+
+	// resolveLocalModel looks up a models.dev bare ID in the model map,
+	// also trying each known channel prefix to find the prefixed DB entry.
+	resolveLocalModel := func(devID string) (*model.Model, bool) {
+		if local, ok := modelByName[devID]; ok {
+			return local, true
+		}
+		for prefix := range channelPrefixSet {
+			if prefixed, ok := modelByName[prefix+devID]; ok {
+				return prefixed, true
+			}
+		}
+		return nil, false
+	}
+
 	candidates := make([]modelsDevSyncCandidate, 0)
 	for providerKey, provider := range catalog.Providers {
 		vendorFound := false
@@ -271,7 +298,7 @@ func SyncModelsDevPreview(c *gin.Context) {
 		}
 
 		for _, devModel := range provider.Models {
-			local, modelFound := modelByName[devModel.Id]
+			local, modelFound := resolveLocalModel(devModel.Id)
 			if !modelFound {
 				continue
 			}
@@ -383,6 +410,16 @@ func SyncModelsDevApply(c *gin.Context) {
 		modelByName[m.ModelName] = m
 	}
 
+	// Collect channel prefixes for prefix-aware model lookup (same as preview).
+	var syncChannels []model.Channel
+	_ = model.DB.Select("settings").Find(&syncChannels)
+	channelPrefixSet := make(map[string]struct{})
+	for _, ch := range syncChannels {
+		if p := model.ExtractModelPrefix(ch.OtherSettings); p != "" {
+			channelPrefixSet[p+"/"] = struct{}{}
+		}
+	}
+
 	updatedCount := 0
 	for _, selection := range request.Selections {
 		provider, providerExists := catalog.Providers[selection.Provider]
@@ -394,6 +431,16 @@ func SyncModelsDevApply(c *gin.Context) {
 			continue
 		}
 		local, localExists := modelByName[selection.ModelName]
+		if !localExists {
+			// Try with channel prefix stripped (models.dev bare ID + prefix = DB name).
+			for prefix := range channelPrefixSet {
+				if prefixed, ok := modelByName[prefix+selection.ModelName]; ok {
+					local = prefixed
+					localExists = true
+					break
+				}
+			}
+		}
 		if !localExists {
 			continue
 		}
