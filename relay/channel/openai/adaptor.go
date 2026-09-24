@@ -783,7 +783,18 @@ func (a *Adaptor) DoResponse(c *gin.Context, resp *http.Response, info *relaycom
 	case relayconstant.RelayModeResponsesCompact:
 		usage, err = OaiResponsesCompactionHandler(c, resp)
 	default:
-		if info.IsStream {
+		contentType := ""
+		if resp != nil {
+			contentType = resp.Header.Get("Content-Type")
+		}
+		if info.ChannelType == constant.ChannelTypeOpenCode &&
+			info.ForceOpenCodeStreamAgg &&
+			strings.Contains(contentType, "text/event-stream") {
+			// compatible_handler may have flipped IsStream from SSE Content-Type;
+			// ForceOpenCodeStreamAgg means the client asked for non-stream JSON.
+			info.IsStream = false
+			usage, err = OpenCodeSSEToNonStreamHandler(c, info, resp)
+		} else if info.IsStream {
 			usage, err = OaiStreamHandler(c, info, resp)
 		} else {
 			usage, err = OpenaiHandler(c, info, resp)
