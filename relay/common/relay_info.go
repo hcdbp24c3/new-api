@@ -94,6 +94,7 @@ type RelayInfo struct {
 	isFirstResponse   bool
 	//SendLastReasoningResponse bool
 	IsStream               bool
+	ForceOpenCodeStreamAgg bool
 	IsGeminiBatchEmbedding bool
 	IsPlayground           bool
 	UsePrice               bool
