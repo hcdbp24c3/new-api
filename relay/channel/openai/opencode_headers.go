@@ -23,7 +23,8 @@ func newOpenCodeRequestID() string {
 // openCodeIDBody builds 12 hex + 14 base62 (26 chars total) matching
 // ^ses_[0-9a-f]{12}[0-9A-Za-z]{14}$ used by the Zen gatekeeper.
 func openCodeIDBody() string {
-	var buf [13]byte // 6 bytes hex (12 chars) + 7 bytes → 14 base62 chars
+	// 6 bytes hex (12 chars) + 14 bytes base62 (14 distinct chars).
+	var buf [20]byte
 	if _, err := rand.Read(buf[:]); err != nil {
 		// crypto/rand failure is fatal for identity headers; fall back to
 		// a fixed-shape id so request still matches the gate regex.
@@ -31,8 +32,8 @@ func openCodeIDBody() string {
 	}
 	hexPart := hex.EncodeToString(buf[:6]) // 12 hex chars
 	base62 := make([]byte, 14)
-	for i := 0; i < 14; i++ {
-		base62[i] = openCodeBase62Alphabet[int(buf[6+i%7])%len(openCodeBase62Alphabet)]
+	for i := range 14 {
+		base62[i] = openCodeBase62Alphabet[int(buf[6+i])%len(openCodeBase62Alphabet)]
 	}
 	return hexPart + string(base62)
 }

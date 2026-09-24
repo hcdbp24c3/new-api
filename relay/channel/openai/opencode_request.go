@@ -23,6 +23,10 @@ func prepareOpenCodeFreeTierRequest(info *relaycommon.RelayInfo, request *dto.Ge
 	ensureOpenCodeGateTools(request)
 }
 
+// ensureOpenCodeGateTools declares shell (or keeps bash) + read when missing so
+// the Zen free-tier gate accepts the request. Declarations only: if the model
+// emits tool_calls for these names they pass through to the client as usual;
+// the gateway does not execute them server-side.
 func ensureOpenCodeGateTools(request *dto.GeneralOpenAIRequest) {
 	have := make(map[string]struct{}, len(request.Tools))
 	for _, t := range request.Tools {

@@ -1,7 +1,6 @@
 package openai
 
 import (
-	"bufio"
 	"fmt"
 	"net/http"
 	"strings"
@@ -42,7 +41,6 @@ func OpenCodeSSEToNonStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, 
 	containStreamUsage := false
 
 	scanner := helper.NewStreamScanner(resp.Body)
-	scanner.Split(bufio.ScanLines)
 	for scanner.Scan() {
 		line := scanner.Text()
 		if !strings.HasPrefix(line, "data:") {

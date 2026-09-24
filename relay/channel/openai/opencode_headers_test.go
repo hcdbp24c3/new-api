@@ -105,5 +105,5 @@ func TestSetupRequestHeaderOpenCodeDoesNotForcePublicWhenAuthOverridePresent(t *
 	require.NoError(t, adaptor.SetupRequestHeader(c, &h, info))
 	// hasAuthOverride skips default Bearer; OpenCode branch must not inject
 	// Bearer public when Authorization override is configured (applied later).
-	assert.NotEqual(t, "Bearer public", h.Get("Authorization"))
+	assert.Empty(t, h.Get("Authorization"))
 }
