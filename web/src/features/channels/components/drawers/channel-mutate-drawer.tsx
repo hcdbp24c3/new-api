@@ -44,6 +44,7 @@ import {
   type ComponentProps,
   type ReactNode,
   useEffect,
+  useId,
   useState,
   useMemo,
   useCallback,
@@ -92,11 +93,6 @@ import {
 } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@/components/ui/tooltip'
-import {
   Sheet,
   SheetClose,
   SheetContent,
@@ -108,6 +104,11 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import { SecureVerificationDialog } from '@/features/auth/secure-verification'
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
 import { useHiddenClickUnlock } from '@/hooks/use-hidden-click-unlock'
@@ -395,6 +396,7 @@ function BaseURLSelector({
 }) {
   const { t } = useTranslation()
   const options = CHANNEL_BASE_URL_OPTIONS[type]
+  const selectId = useId()
 
   const selectItems = useMemo(() => {
     if (!options) return []
@@ -418,7 +420,7 @@ function BaseURLSelector({
 
   return (
     <div className='space-y-2'>
-      <label className='text-sm font-medium leading-none'>
+      <label htmlFor={selectId} className='text-sm leading-none font-medium'>
         {t('API Endpoint')}
       </label>
       <Select
@@ -434,7 +436,10 @@ function BaseURLSelector({
         }}
         value={resolvedValue}
       >
-        <SelectTrigger className='[&_*[data-slot=select-value]]:line-clamp-none'>
+        <SelectTrigger
+          id={selectId}
+          className='[&_*[data-slot=select-value]]:line-clamp-none'
+        >
           <SelectValue placeholder={t('Select endpoint')} />
         </SelectTrigger>
         <SelectContent alignItemWithTrigger={false}>
@@ -1062,7 +1067,7 @@ export function ChannelMutateDrawer({
           ? { kind: 'plugin', key: defaults.task_plugin_key || '' }
           : { kind: 'builtin', type: defaults.type }
       )
-if (isNewChannel) {
+      if (isNewChannel) {
         setModelConfiguration(null)
         setChoosingProvider(false)
         setConfigurationSection('connection')
@@ -1767,9 +1772,7 @@ if (isNewChannel) {
           <div className='space-y-0.5'>
             <FormLabel>{t('Auto-update balance')}</FormLabel>
             <FormDescription>
-              {t(
-                'Periodically check and update the balance for this channel'
-              )}
+              {t('Periodically check and update the balance for this channel')}
             </FormDescription>
           </div>
           <FormControl>
@@ -2976,7 +2979,7 @@ if (isNewChannel) {
                               key={modelName}
                               className='flex items-center gap-1'
                             >
-                              <span className='text-muted-foreground min-w-0 max-w-[120px] truncate text-xs'>
+                              <span className='text-muted-foreground max-w-[120px] min-w-0 truncate text-xs'>
                                 {modelName}
                               </span>
                               {badges}
@@ -3249,10 +3252,7 @@ if (isNewChannel) {
                             />
                           }
                         >
-                          <HelpCircle
-                            className='h-4 w-4'
-                            aria-hidden='true'
-                          />
+                          <HelpCircle className='h-4 w-4' aria-hidden='true' />
                         </TooltipTrigger>
                         <TooltipContent
                           side='top'
@@ -3270,9 +3270,7 @@ if (isNewChannel) {
                                 aria-hidden='true'
                               />
                               <span>
-                                {field.value
-                                  ? `${field.value}/gpt-4`
-                                  : 'gpt-4'}
+                                {field.value ? `${field.value}/gpt-4` : 'gpt-4'}
                               </span>
                             </div>
                           </div>
@@ -3848,88 +3846,104 @@ if (isNewChannel) {
               currentType !== 8 &&
               currentType !== 22 &&
               currentType !== 36 && (
-              <FormField
-                control={form.control}
-                name='base_url'
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel
-                      required={currentType === CHANNEL_TYPE_TASK_PLUGIN}
-                    >
-                      {t('Base URL')}
-                    </FormLabel>
-                    <FormControl>
-                      <Input placeholder={baseUrlPlaceholder} {...field} />
-                    </FormControl>
-                    {currentType !== CHANNEL_TYPE_TASK_PLUGIN && (
-                      <FormDescription>
-                        {t(
-                          'Custom API base URL. For official channels, New API has built-in addresses. Only fill this for third-party proxy sites or special endpoints. Do not add /v1 or trailing slash.'
+                <FormField
+                  control={form.control}
+                  name='base_url'
+                  render={({ field }) => {
+                    const isEndpointPreset = CHANNEL_BASE_URL_OPTIONS[
+                      currentType
+                    ]?.some((option) => option.value === field.value)
+                    return (
+                      <FormItem>
+                        <FormLabel
+                          required={currentType === CHANNEL_TYPE_TASK_PLUGIN}
+                        >
+                          {t('Base URL')}
+                        </FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder={
+                              isEndpointPreset
+                                ? (field.value ?? '')
+                                : baseUrlPlaceholder
+                            }
+                            {...field}
+                            value={isEndpointPreset ? '' : field.value}
+                            disabled={isEndpointPreset}
+                          />
+                        </FormControl>
+                        {currentType !== CHANNEL_TYPE_TASK_PLUGIN && (
+                          <FormDescription>
+                            {t(
+                              'Custom API base URL. For official channels, New API has built-in addresses. Only fill this for third-party proxy sites or special endpoints. Do not add /v1 or trailing slash.'
+                            )}
+                          </FormDescription>
                         )}
-                      </FormDescription>
-                    )}
-                    {currentType === CHANNEL_TYPE_TASK_PLUGIN &&
-                      !boundTaskPlugin?.baseUrl && (
-                        <FormDescription>
-                          {t(
-                            'The upstream address this plugin sends requests to. The plugin declares no default, so it must be filled in.'
+                        {currentType === CHANNEL_TYPE_TASK_PLUGIN &&
+                          !boundTaskPlugin?.baseUrl && (
+                            <FormDescription>
+                              {t(
+                                'The upstream address this plugin sends requests to. The plugin declares no default, so it must be filled in.'
+                              )}
+                            </FormDescription>
                           )}
-                        </FormDescription>
-                      )}
-                    {currentType === CHANNEL_TYPE_TASK_PLUGIN &&
-                      boundTaskPlugin?.baseUrl && (
-                        <FormDescription className='flex flex-wrap items-center gap-x-1'>
-                          <span>{t('Plugin default')}:</span>
-                          <span className='font-mono break-all'>
-                            {boundTaskPlugin.baseUrl}
-                          </span>
-                          {(field.value ?? '').trim().replace(/\/+$/, '') !==
-                            boundTaskPlugin.baseUrl && (
-                            <Button
-                              type='button'
-                              variant='link'
-                              size='xs'
-                              className='h-auto p-0'
-                              onClick={() =>
-                                form.setValue(
-                                  'base_url',
-                                  boundTaskPlugin.baseUrl ?? '',
-                                  {
-                                    shouldDirty: true,
-                                    shouldValidate: true,
+                        {currentType === CHANNEL_TYPE_TASK_PLUGIN &&
+                          boundTaskPlugin?.baseUrl && (
+                            <FormDescription className='flex flex-wrap items-center gap-x-1'>
+                              <span>{t('Plugin default')}:</span>
+                              <span className='font-mono break-all'>
+                                {boundTaskPlugin.baseUrl}
+                              </span>
+                              {(field.value ?? '')
+                                .trim()
+                                .replace(/\/+$/, '') !==
+                                boundTaskPlugin.baseUrl && (
+                                <Button
+                                  type='button'
+                                  variant='link'
+                                  size='xs'
+                                  className='h-auto p-0'
+                                  onClick={() =>
+                                    form.setValue(
+                                      'base_url',
+                                      boundTaskPlugin.baseUrl ?? '',
+                                      {
+                                        shouldDirty: true,
+                                        shouldValidate: true,
+                                      }
+                                    )
                                   }
-                                )
-                              }
-                            >
-                              {t('Use default')}
-                            </Button>
+                                >
+                                  {t('Use default')}
+                                </Button>
+                              )}
+                            </FormDescription>
                           )}
-                        </FormDescription>
-                      )}
-                    <FormMessage />
-                    {(taskPluginBaseUrlTrust?.plainHttp ||
-                      taskPluginBaseUrlTrust?.privateHost) && (
-                      <Alert>
-                        <AlertCircle />
-                        <AlertDescription>
-                          {taskPluginBaseUrlTrust?.plainHttp &&
-                            t(
-                              'This base URL uses plain HTTP, so the channel key is sent unencrypted.'
-                            )}
-                          {taskPluginBaseUrlTrust?.plainHttp &&
-                            taskPluginBaseUrlTrust?.privateHost &&
-                            ' '}
-                          {taskPluginBaseUrlTrust?.privateHost &&
-                            t(
-                              'This base URL points at a private or local network host. Make sure it is an upstream you control.'
-                            )}
-                        </AlertDescription>
-                      </Alert>
-                    )}
-                  </FormItem>
-                )}
-              />
-            )}
+                        <FormMessage />
+                        {(taskPluginBaseUrlTrust?.plainHttp ||
+                          taskPluginBaseUrlTrust?.privateHost) && (
+                          <Alert>
+                            <AlertCircle />
+                            <AlertDescription>
+                              {taskPluginBaseUrlTrust?.plainHttp &&
+                                t(
+                                  'This base URL uses plain HTTP, so the channel key is sent unencrypted.'
+                                )}
+                              {taskPluginBaseUrlTrust?.plainHttp &&
+                                taskPluginBaseUrlTrust?.privateHost &&
+                                ' '}
+                              {taskPluginBaseUrlTrust?.privateHost &&
+                                t(
+                                  'This base URL points at a private or local network host. Make sure it is an upstream you control.'
+                                )}
+                            </AlertDescription>
+                          </Alert>
+                        )}
+                      </FormItem>
+                    )
+                  }}
+                />
+              )}
 
             {currentType === CHANNEL_TYPE_ADVANCED_CUSTOM && (
               <FormField

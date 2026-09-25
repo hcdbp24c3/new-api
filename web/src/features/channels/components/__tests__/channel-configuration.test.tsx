@@ -287,6 +287,78 @@ test('an unavailable default URL endpoint keeps the fallback placeholder and all
   expect(onInternalServerError).not.toHaveBeenCalled()
 })
 
+test('a predefined endpoint keeps the Base URL read-only after provider selection', async () => {
+  render(<ConfigurationHarness />)
+  fireEvent.click(screen.getByRole('option', { name: 'Moonshot Built-in #25' }))
+
+  const address = screen.getByRole('textbox', { name: 'Base URL' })
+  await waitFor(() =>
+    expect(address).toHaveAttribute('placeholder', 'https://api.moonshot.cn')
+  )
+  expect(address).toBeDisabled()
+  expect(address).toHaveValue('')
+  expect(
+    screen.getByRole('combobox', { name: 'API Endpoint' })
+  ).toHaveTextContent('Moonshot CN')
+})
+
+test('choosing Custom URL re-enables the Base URL input for manual entry', async () => {
+  editingChannel.type = 25
+  editingChannel.base_url = 'https://api.kimi.com'
+  const user = userEvent.setup()
+  render(<ConfigurationHarness currentRow={editingChannel} />)
+  await screen.findByDisplayValue('Existing channel')
+  const address = screen.getByRole('textbox', { name: 'Base URL' })
+  expect(address).toBeDisabled()
+
+  await user.click(screen.getByRole('combobox', { name: 'API Endpoint' }))
+  await user.click(screen.getByRole('option', { name: 'Custom URL' }))
+  expect(address).toBeEnabled()
+  expect(address).toHaveValue('')
+  expect(address).toHaveAttribute('placeholder', 'Leave empty to use default')
+  fireEvent.change(address, { target: { value: 'https://custom.example' } })
+  expect(address).toHaveValue('https://custom.example')
+})
+
+test('editing a preset endpoint keeps the stored URL out of the input but still saves it', async () => {
+  editingChannel.type = 25
+  editingChannel.base_url = 'https://api.kimi.com'
+  const put = vi
+    .spyOn(api, 'put')
+    .mockResolvedValue({ data: { success: true } })
+  const user = userEvent.setup()
+  render(<ConfigurationHarness currentRow={editingChannel} />)
+  await screen.findByDisplayValue('Existing channel')
+  const address = screen.getByRole('textbox', { name: 'Base URL' })
+  await waitFor(() =>
+    expect(address).toHaveAttribute('placeholder', 'https://api.kimi.com')
+  )
+  expect(address).toBeDisabled()
+  expect(address).toHaveValue('')
+  expect(
+    screen.getByRole('combobox', { name: 'API Endpoint' })
+  ).toHaveTextContent('Kimi')
+  await user.click(screen.getByRole('button', { name: 'Update Channel' }))
+  await waitFor(() => expect(put).toHaveBeenCalled())
+  expect(put.mock.calls[0]?.[1]).toMatchObject({
+    id: 42,
+    base_url: 'https://api.kimi.com',
+  })
+})
+
+test('editing a custom address selects Custom URL and keeps the Base URL editable', async () => {
+  editingChannel.type = 25
+  // base_url stays 'https://saved.example', which is not a preset endpoint
+  render(<ConfigurationHarness currentRow={editingChannel} />)
+  await screen.findByDisplayValue('Existing channel')
+  expect(
+    screen.getByRole('combobox', { name: 'API Endpoint' })
+  ).toHaveTextContent('Custom URL')
+  const address = screen.getByRole('textbox', { name: 'Base URL' })
+  expect(address).toBeEnabled()
+  expect(address).toHaveValue('https://saved.example')
+})
+
 test('model mapping help opens on click, stays open after pointer exit, and closes without dismissing the channel', async () => {
   const user = userEvent.setup()
   render(<ConfigurationHarness currentRow={editingChannel} />)
