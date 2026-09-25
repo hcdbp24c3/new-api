@@ -27,6 +27,7 @@ import (
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relay/common_handler"
 	relayconstant "github.com/QuantumNous/new-api/relay/constant"
+	"github.com/QuantumNous/new-api/relaykit/relayconvert"
 	kitreasoning "github.com/QuantumNous/new-api/relaykit/relayconvert/reasoning"
 	"github.com/QuantumNous/new-api/relaykit/types"
 	"github.com/QuantumNous/new-api/service"
@@ -173,9 +174,24 @@ func (a *Adaptor) GetRequestURL(info *relaycommon.RelayInfo) (string, error) {
 		return url, nil
 	case constant.ChannelTypeOpenCode:
 		// OpenCode base URLs already include /v1 (e.g. https://opencode.ai/zen/v1
-		// or https://opencode.ai/zen/go/v1). Append /chat/completions directly to
+		// or https://opencode.ai/zen/go/v1). Append the endpoint path directly to
 		// avoid the double-/v1 caused by RequestURLPath being /v1/chat/completions.
-		return fmt.Sprintf("%s/chat/completions", info.ChannelBaseUrl), nil
+		// The endpoint family follows the official Zen docs table, not the claude/
+		// gemini adaptors: those would emit /v1/messages and /{version}/models.
+		switch openCodeUpstreamProtocol(info) {
+		case openCodeProtocolResponses:
+			return fmt.Sprintf("%s/responses", info.ChannelBaseUrl), nil
+		case openCodeProtocolClaude:
+			return fmt.Sprintf("%s/messages", info.ChannelBaseUrl), nil
+		case openCodeProtocolGemini:
+			action := "generateContent"
+			if info.IsStream {
+				action = "streamGenerateContent?alt=sse"
+			}
+			return fmt.Sprintf("%s/models/%s:%s", info.ChannelBaseUrl, info.UpstreamModelName, action), nil
+		default:
+			return fmt.Sprintf("%s/chat/completions", info.ChannelBaseUrl), nil
+		}
 	default:
 		if (info.RelayFormat == types.RelayFormatClaude || info.RelayFormat == types.RelayFormatGemini) &&
 			info.RelayMode != relayconstant.RelayModeResponses &&
@@ -251,6 +267,16 @@ func (a *Adaptor) SetupRequestHeader(c *gin.Context, header *http.Header, info *
 			header.Set("Authorization", "Bearer public")
 		}
 		applyOpenCodeFreeTierHeaders(header)
+		switch openCodeUpstreamProtocol(info) {
+		case openCodeProtocolClaude:
+			header.Set("anthropic-version", "2023-06-01")
+		case openCodeProtocolGemini:
+			// Free-tier anonymous key is "" and becomes "Bearer public" above;
+			// never emit an empty x-goog-api-key.
+			if info.ApiKey != "" {
+				header.Set("x-goog-api-key", info.ApiKey)
+			}
+		}
 	}
 	return nil
 }
@@ -436,6 +462,27 @@ func (a *Adaptor) ConvertOpenAIRequest(c *gin.Context, info *relaycommon.RelayIn
 	}
 	if capabilities.UseDeveloperRole && len(request.Messages) > 0 && request.Messages[0].Role == "system" {
 		request.Messages[0].Role = "developer"
+	}
+
+	switch openCodeUpstreamProtocol(info) {
+	case openCodeProtocolResponses:
+		result, err := service.ConvertRequestByID(c, info, relayconvert.ConverterOpenAIChatToOpenAIResponses, request)
+		if err != nil {
+			return nil, err
+		}
+		return result.Value, nil
+	case openCodeProtocolClaude:
+		result, err := service.ConvertRequestByID(c, info, relayconvert.ConverterOpenAIChatToClaudeMessages, request)
+		if err != nil {
+			return nil, err
+		}
+		return result.Value, nil
+	case openCodeProtocolGemini:
+		result, err := service.ConvertRequestByID(c, info, relayconvert.ConverterOpenAIChatToGeminiContent, request)
+		if err != nil {
+			return nil, err
+		}
+		return result.Value, nil
 	}
 
 	return request, nil
