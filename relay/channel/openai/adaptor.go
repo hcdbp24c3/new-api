@@ -27,6 +27,7 @@ import (
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relay/common_handler"
 	relayconstant "github.com/QuantumNous/new-api/relay/constant"
+	"github.com/QuantumNous/new-api/relaykit/relayconvert"
 	kitreasoning "github.com/QuantumNous/new-api/relaykit/relayconvert/reasoning"
 	"github.com/QuantumNous/new-api/relaykit/types"
 	"github.com/QuantumNous/new-api/service"
@@ -266,6 +267,16 @@ func (a *Adaptor) SetupRequestHeader(c *gin.Context, header *http.Header, info *
 			header.Set("Authorization", "Bearer public")
 		}
 		applyOpenCodeFreeTierHeaders(header)
+		switch openCodeUpstreamProtocol(info) {
+		case openCodeProtocolClaude:
+			header.Set("anthropic-version", "2023-06-01")
+		case openCodeProtocolGemini:
+			// Free-tier anonymous key is "" and becomes "Bearer public" above;
+			// never emit an empty x-goog-api-key.
+			if info.ApiKey != "" {
+				header.Set("x-goog-api-key", info.ApiKey)
+			}
+		}
 	}
 	return nil
 }
@@ -451,6 +462,27 @@ func (a *Adaptor) ConvertOpenAIRequest(c *gin.Context, info *relaycommon.RelayIn
 	}
 	if capabilities.UseDeveloperRole && len(request.Messages) > 0 && request.Messages[0].Role == "system" {
 		request.Messages[0].Role = "developer"
+	}
+
+	switch openCodeUpstreamProtocol(info) {
+	case openCodeProtocolResponses:
+		result, err := service.ConvertRequestByID(c, info, relayconvert.ConverterOpenAIChatToOpenAIResponses, request)
+		if err != nil {
+			return nil, err
+		}
+		return result.Value, nil
+	case openCodeProtocolClaude:
+		result, err := service.ConvertRequestByID(c, info, relayconvert.ConverterOpenAIChatToClaudeMessages, request)
+		if err != nil {
+			return nil, err
+		}
+		return result.Value, nil
+	case openCodeProtocolGemini:
+		result, err := service.ConvertRequestByID(c, info, relayconvert.ConverterOpenAIChatToGeminiContent, request)
+		if err != nil {
+			return nil, err
+		}
+		return result.Value, nil
 	}
 
 	return request, nil

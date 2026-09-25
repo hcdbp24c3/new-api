@@ -48,6 +48,13 @@ func prepareOpenCodeFreeTierRequest(info *relaycommon.RelayInfo, request *dto.Ge
 	if info.ChannelType != constant.ChannelTypeOpenCode {
 		return
 	}
+	switch openCodeUpstreamProtocol(info) {
+	case openCodeProtocolClaude, openCodeProtocolGemini:
+		// Paid-only lanes: forced stream is meaningless there (their DoResponse
+		// never sets ForceOpenCodeStreamAgg) and the Zen free-tier gate tools
+		// belong only to the chat/responses lanes.
+		return
+	}
 	clientWantedStream := lo.FromPtrOr(request.Stream, false)
 	stream := true
 	request.Stream = &stream

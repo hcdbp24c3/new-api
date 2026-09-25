@@ -8,6 +8,7 @@ import (
 
 	"github.com/QuantumNous/new-api/constant"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
+	relayconstant "github.com/QuantumNous/new-api/relay/constant"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -106,4 +107,53 @@ func TestSetupRequestHeaderOpenCodeDoesNotForcePublicWhenAuthOverridePresent(t *
 	// hasAuthOverride skips default Bearer; OpenCode branch must not inject
 	// Bearer public when Authorization override is configured (applied later).
 	assert.Empty(t, h.Get("Authorization"))
+}
+
+func TestSetupRequestHeaderOpenCodeLaneProtocolHeaders(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
+
+	cases := []struct {
+		name                 string
+		model                string
+		apiKey               string
+		wantAnthropicVersion string
+		wantGoogAPIKey       string
+	}{
+		{
+			name:                 "claude lane sends anthropic-version",
+			model:                "claude-sonnet-4.5",
+			apiKey:               "sk-test",
+			wantAnthropicVersion: "2023-06-01",
+		},
+		{
+			name:           "gemini lane sends api key",
+			model:          "gemini-3-pro",
+			apiKey:         "sk-goog",
+			wantGoogAPIKey: "sk-goog",
+		},
+		{
+			name:   "gemini free tier omits empty api key",
+			model:  "gemini-3-pro",
+			apiKey: "",
+		},
+		{
+			name:   "chat lane sends neither protocol header",
+			model:  "mimo-v2.5-free",
+			apiKey: "sk-test",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			info := openCodeRelayInfo(true)
+			info.RelayMode = relayconstant.RelayModeChatCompletions
+			info.UpstreamModelName = tc.model
+			info.ApiKey = tc.apiKey
+			h := http.Header{}
+			require.NoError(t, (&Adaptor{}).SetupRequestHeader(c, &h, info))
+			assert.Equal(t, tc.wantAnthropicVersion, h.Get("anthropic-version"))
+			assert.Equal(t, tc.wantGoogAPIKey, h.Get("x-goog-api-key"))
+		})
+	}
 }
