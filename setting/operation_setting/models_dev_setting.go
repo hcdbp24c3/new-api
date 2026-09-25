@@ -5,7 +5,7 @@ import (
 )
 
 type ModelDevSyncSetting struct {
-	Enabled         bool    `json:"enabled"`
+	Enabled           bool    `json:"enabled"`
 	SyncIntervalHours float64 `json:"sync_interval_hours"`
 }
 

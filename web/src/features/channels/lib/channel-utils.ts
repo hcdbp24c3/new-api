@@ -105,6 +105,8 @@ export function getChannelTypeIcon(type: number): string {
     71: 'Ollama', // Ollama Cloud
     72: 'FreeModel', // FreeModel
     73: 'NousResearch', // Nous Research
+    74: 'Vllm', // vLLM
+    75: 'SGLang', // SGLang
 
     // Image/Video generation
     2: 'Midjourney', // MjProxy
@@ -114,7 +116,7 @@ export function getChannelTypeIcon(type: number): string {
     52: 'Vidu', // Vidu
     36: 'Suno', // SunoAPI
     55: 'OpenAI', // Sora
-    54: 'Doubao', // DoubaoVideo
+    54: 'Doubao', // Doubao
     56: 'Replicate', // Replicate
 
     // Tools & Platforms

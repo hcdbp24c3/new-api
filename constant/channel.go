@@ -71,7 +71,11 @@ const (
 	ChannelTypeOllamaCloud    = 71
 	ChannelTypeFreeModel      = 72
 	ChannelTypeNousResearch   = 73
-	ChannelTypeDummy          // this one is only for count, do not add any channel after this
+	// VLLM/SGLang are upstream types 62/63; the fork already persisted 62-73
+	// in deployed databases, so they continue here to keep those IDs stable.
+	ChannelTypeVLLM   = 74
+	ChannelTypeSGLang = 75
+	ChannelTypeDummy  // this one is only for count, do not add any channel after this
 
 )
 
@@ -149,9 +153,11 @@ var ChannelBaseURLs = []string{
 	"https://api.groq.com/openai",               //68
 	"https://opencode.ai/zen/v1",                //69
 	"https://ark.cn-beijing.volces.com/api/v3",  //70
-	"https://ollama.com/api",                     //71
-	"https://api.freemodel.dev",                  //72
-	"https://inference-api.nousresearch.com/v1",  //73
+	"https://ollama.com/api",                    //71
+	"https://api.freemodel.dev",                 //72
+	"https://inference-api.nousresearch.com/v1", //73
+	"", //74
+	"", //75
 }
 
 func GetChannelBaseURL(channelType int) string {
@@ -212,7 +218,7 @@ var ChannelTypeNames = map[int]string{
 	ChannelTypeJimeng:         "Jimeng",
 	ChannelTypeVidu:           "Vidu",
 	ChannelTypeSubmodel:       "Submodel",
-	ChannelTypeDoubaoVideo:    "DoubaoVideo",
+	ChannelTypeDoubaoVideo:    "Doubao",
 	ChannelTypeSora:           "Sora",
 	ChannelTypeReplicate:      "Replicate",
 	ChannelTypeCodex:          "ChatGPT Subscription (Codex)",
@@ -232,6 +238,8 @@ var ChannelTypeNames = map[int]string{
 	ChannelTypeOllamaCloud:    "Ollama Cloud",
 	ChannelTypeFreeModel:      "FreeModel",
 	ChannelTypeNousResearch:   "Nous Research",
+	ChannelTypeVLLM:           "vLLM",
+	ChannelTypeSGLang:         "SGLang",
 }
 
 func GetChannelTypeName(channelType int) string {
@@ -263,4 +271,14 @@ var ChannelSpecialBases = map[string]ChannelSpecialBase{
 		ClaudeBaseURL: "https://ark.cn-beijing.volces.com/api/coding",
 		OpenAIBaseURL: "https://ark.cn-beijing.volces.com/api/coding/v3",
 	},
+}
+
+// IsAdvancedCustomChannel includes named channels backed by route presets.
+func IsAdvancedCustomChannel(channelType int) bool {
+	switch channelType {
+	case ChannelTypeAdvancedCustom, ChannelTypeVLLM, ChannelTypeSGLang:
+		return true
+	default:
+		return false
+	}
 }

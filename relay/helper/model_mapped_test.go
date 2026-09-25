@@ -8,11 +8,11 @@ import (
 
 func TestStripModelPrefixFromBody(t *testing.T) {
 	tests := []struct {
-		name       string
-		body       string
-		prefix     string
-		wantModel  string
-		wantUnmod  bool // expect body returned unchanged
+		name      string
+		body      string
+		prefix    string
+		wantModel string
+		wantUnmod bool // expect body returned unchanged
 	}{
 		{
 			name:      "strips prefix from model field",
@@ -21,21 +21,21 @@ func TestStripModelPrefixFromBody(t *testing.T) {
 			wantModel: "gpt-4",
 		},
 		{
-			name:     "empty prefix returns body unchanged",
-			body:     `{"model": "dashscope/gpt-4", "messages": []}`,
-			prefix:   "",
+			name:      "empty prefix returns body unchanged",
+			body:      `{"model": "dashscope/gpt-4", "messages": []}`,
+			prefix:    "",
 			wantUnmod: true,
 		},
 		{
-			name:     "no model key returns body unchanged",
-			body:     `{"messages": []}`,
-			prefix:   "dashscope",
+			name:      "no model key returns body unchanged",
+			body:      `{"messages": []}`,
+			prefix:    "dashscope",
 			wantUnmod: true,
 		},
 		{
-			name:     "malformed JSON returns body unchanged",
-			body:     `not json`,
-			prefix:   "dashscope",
+			name:      "malformed JSON returns body unchanged",
+			body:      `not json`,
+			prefix:    "dashscope",
 			wantUnmod: true,
 		},
 		{
@@ -45,9 +45,9 @@ func TestStripModelPrefixFromBody(t *testing.T) {
 			wantModel: "gpt-4",
 		},
 		{
-			name:     "non-string model field returns body unchanged",
-			body:     `{"model": 123}`,
-			prefix:   "dashscope",
+			name:      "non-string model field returns body unchanged",
+			body:      `{"model": 123}`,
+			prefix:    "dashscope",
 			wantUnmod: true,
 		},
 	}

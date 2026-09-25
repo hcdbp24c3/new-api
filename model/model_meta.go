@@ -421,9 +421,9 @@ func GetAllModels(offset int, limit int) ([]*Model, error) {
 // ModelConnection describes an enabled route independently of catalog visibility or price.
 type ModelConnection struct {
 	AbilityWithChannel
-	ChannelName    string `json:"channel_name"`
-	BareModel      string `json:"-" gorm:"-"`
-	OtherSettings  string `json:"-" gorm:"column:other_settings"`
+	ChannelName   string `json:"channel_name"`
+	BareModel     string `json:"-" gorm:"-"`
+	OtherSettings string `json:"-" gorm:"column:other_settings"`
 }
 
 func GetModelConnections() ([]ModelConnection, error) {

@@ -22,21 +22,21 @@ const (
 	ChannelTestModeAutoBanOnly     = "auto_ban_only"
 	ChannelTestModePassiveRecovery = "passive_recovery"
 
-	ChannelTestConcurrencyOptionKey    = "monitor_setting.channel_test_concurrency"
-	DefaultChannelTestConcurrency      = 1
-	MaxChannelTestConcurrency          = 32
-	MultiKeyTestConcurrencyOptionKey   = "monitor_setting.multi_key_test_concurrency"
-	DefaultMultiKeyTestConcurrency     = 1
-	MaxMultiKeyTestConcurrency         = 16
+	ChannelTestConcurrencyOptionKey  = "monitor_setting.channel_test_concurrency"
+	DefaultChannelTestConcurrency    = 1
+	MaxChannelTestConcurrency        = 32
+	MultiKeyTestConcurrencyOptionKey = "monitor_setting.multi_key_test_concurrency"
+	DefaultMultiKeyTestConcurrency   = 1
+	MaxMultiKeyTestConcurrency       = 16
 )
 
 // 默认配置
 var monitorSetting = MonitorSetting{
-	AutoTestChannelEnabled:   false,
-	AutoTestChannelMinutes:   10,
-	ChannelTestMode:          ChannelTestModeScheduledAll,
-	ChannelTestConcurrency:   DefaultChannelTestConcurrency,
-	MultiKeyTestConcurrency:  DefaultMultiKeyTestConcurrency,
+	AutoTestChannelEnabled:  false,
+	AutoTestChannelMinutes:  10,
+	ChannelTestMode:         ChannelTestModeScheduledAll,
+	ChannelTestConcurrency:  DefaultChannelTestConcurrency,
+	MultiKeyTestConcurrency: DefaultMultiKeyTestConcurrency,
 }
 
 func init() {

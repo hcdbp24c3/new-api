@@ -21,9 +21,17 @@ For commercial licensing, please contact support@quantumnous.com
 // All label/name values are i18n keys; use t(value) when displaying.
 // ============================================================================
 
+export const CHANNEL_TYPE_OLLAMA = 4
+
+export const CHANNEL_TYPE_SUB2API = 59
+
 export const CHANNEL_TYPE_NEW_API = 60
 
 export const CHANNEL_TYPE_TASK_PLUGIN = 61
+
+export const CHANNEL_TYPE_VLLM = 74
+
+export const CHANNEL_TYPE_SGLANG = 75
 
 export const CHANNEL_TYPES = {
   0: 'Unknown',
@@ -76,7 +84,7 @@ export const CHANNEL_TYPES = {
   51: 'Jimeng',
   52: 'Vidu',
   53: 'Submodel',
-  54: 'DoubaoVideo',
+  54: 'Doubao',
   55: 'Sora',
   56: 'Replicate',
   57: 'ChatGPT Subscription (Codex)',
@@ -96,6 +104,8 @@ export const CHANNEL_TYPES = {
   71: 'Ollama Cloud',
   72: 'FreeModel',
   73: 'Nous Research',
+  74: 'vLLM',
+  75: 'SGLang',
 } as const
 
 export type ChannelProviderPresentation = {
@@ -159,7 +169,8 @@ export const CHANNEL_PROVIDER_PRESENTATION: Partial<
   52: { descriptionKey: 'Connect to Vidu video generation services' },
   53: { descriptionKey: 'Connect to Submodel model services' },
   54: {
-    descriptionKey: 'Generate Doubao Seedance videos through Volcengine Ark',
+    descriptionKey:
+      'Connect to Doubao Seedance video and Seedream image generation through Volcengine Ark',
   },
   55: { descriptionKey: 'Connect to OpenAI Sora video generation services' },
   56: { descriptionKey: 'Access hosted model predictions through Replicate' },
@@ -173,7 +184,8 @@ export const CHANNEL_PROVIDER_PRESENTATION: Partial<
   },
   59: { descriptionKey: 'Connect to model services through a Sub2API gateway' },
   60: {
-    descriptionKey: 'Connect to model services from another New API instance',
+    descriptionKey:
+      'Connect to New API model services with support for multiple task plugins',
   },
   62: {
     descriptionKey:
@@ -223,13 +235,15 @@ export const CHANNEL_PROVIDER_PRESENTATION: Partial<
     descriptionKey:
       'Access Nous Research models including Hermes and more (OpenAI-compatible)',
   },
+  74: { descriptionKey: 'Connect to self-hosted models served by vLLM' },
+  75: { descriptionKey: 'Connect to self-hosted models served by SGLang' },
 } satisfies Record<
   Exclude<keyof typeof CHANNEL_TYPES, 0 | typeof CHANNEL_TYPE_TASK_PLUGIN>,
   ChannelProviderPresentation
 >
 
 const CHANNEL_TYPE_DISPLAY_ORDER: number[] = [
-  1, 14, 24, 33, 43, 3, 41, 17, 45, 25, 26, 23, 48, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 60, 58, 59, 61, 42, 34, 20,
+  1, 14, 24, 33, 43, 3, 41, 17, 45, 25, 26, 23, 48, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 60, 58, 59, 61, 42, 34, 20,
   4, 40, 27, 15, 46, 18, 31, 35, 49, 19, 47, 37, 38, 39, 11, 8, 57, 22, 21, 44,
   2, 5, 36, 50, 51, 52, 53, 54, 55, 56,
 ]
@@ -639,6 +653,8 @@ export const CHANNEL_BASE_URL_OPTIONS: Record<number, BaseURLOption[]> = {
 export const MODEL_FETCHABLE_TYPES = new Set([
   1, 4, 14, 17, 20, 23, 24, 25, 26, 27, 31, 34, 35, 40, 42, 43, 47, 48, 57, 58,
   59, 60, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73,
+  CHANNEL_TYPE_VLLM,
+  CHANNEL_TYPE_SGLANG,
 ])
 
 export const FIELD_PASSTHROUGH_TYPES = new Set([
@@ -648,6 +664,8 @@ export const FIELD_PASSTHROUGH_TYPES = new Set([
   58,
   59,
   CHANNEL_TYPE_NEW_API,
+  CHANNEL_TYPE_VLLM,
+  CHANNEL_TYPE_SGLANG,
 ])
 
 export const OPENAI_FIELD_PASSTHROUGH_TYPES = new Set([
@@ -656,6 +674,8 @@ export const OPENAI_FIELD_PASSTHROUGH_TYPES = new Set([
   58,
   59,
   CHANNEL_TYPE_NEW_API,
+  CHANNEL_TYPE_VLLM,
+  CHANNEL_TYPE_SGLANG,
 ])
 
 export const CLAUDE_FIELD_PASSTHROUGH_TYPES = new Set([
@@ -663,6 +683,8 @@ export const CLAUDE_FIELD_PASSTHROUGH_TYPES = new Set([
   58,
   59,
   CHANNEL_TYPE_NEW_API,
+  CHANNEL_TYPE_VLLM,
+  CHANNEL_TYPE_SGLANG,
 ])
 
 export const TYPE_TO_KEY_PROMPT: Record<number, string> = {
@@ -687,6 +709,8 @@ export const TYPE_TO_KEY_PROMPT: Record<number, string> = {
   70: 'Format: ep-... (VolcEngine Ark API key)',
   72: 'Format: fm-... (FreeModel API key)',
   73: 'Format: nous-... (Nous Research API key)',
+  74: 'vLLM API key, or EMPTY if authentication is disabled',
+  75: 'SGLang API key, or EMPTY if authentication is disabled',
 }
 
 export const CHANNEL_TYPE_WARNINGS: Record<number, string> = {

@@ -1176,10 +1176,10 @@ func testChannelAllKeysForHealthCheck(ctx context.Context, channel *model.Channe
 
 	// Process results
 	type processedResult struct {
-		index     int
-		localErr  error
-		apiError  *types.NewAPIError
-		context   *gin.Context
+		index    int
+		localErr error
+		apiError *types.NewAPIError
+		context  *gin.Context
 	}
 	var processed []processedResult
 
@@ -1274,10 +1274,10 @@ func testChannelAllKeysSequential(ctx context.Context, channel *model.Channel, k
 	tik := time.Now()
 
 	type keyResult struct {
-		index      int
-		result     channelKeyTestResult
-		shouldBan  bool
-		apiError   *types.NewAPIError
+		index     int
+		result    channelKeyTestResult
+		shouldBan bool
+		apiError  *types.NewAPIError
 	}
 
 	results := make([]keyResult, 0, len(keys))

@@ -30,23 +30,23 @@ const modelDevSyncURL = "https://models.dev/catalog.json"
 // carry richer metadata (id, name, reasoning, tool_call, limit, cost).
 
 type modelDevCatalog struct {
-	Models    map[string]any               `json:"models"`
-	Providers map[string]modelDevProvider  `json:"providers"`
+	Models    map[string]any              `json:"models"`
+	Providers map[string]modelDevProvider `json:"providers"`
 }
 
 type modelDevProvider struct {
-	Id     string                    `json:"id"`
-	Name   string                    `json:"name"`
-	Models map[string]modelDevModel  `json:"models"`
+	Id     string                   `json:"id"`
+	Name   string                   `json:"name"`
+	Models map[string]modelDevModel `json:"models"`
 }
 
 type modelDevModel struct {
-	Id        string         `json:"id"`
-	Name      string         `json:"name"`
-	Reasoning bool           `json:"reasoning"`
-	ToolCall  bool           `json:"tool_call"`
-	Limit     modelDevLimit  `json:"limit"`
-	Cost      modelDevCost   `json:"cost"`
+	Id        string        `json:"id"`
+	Name      string        `json:"name"`
+	Reasoning bool          `json:"reasoning"`
+	ToolCall  bool          `json:"tool_call"`
+	Limit     modelDevLimit `json:"limit"`
+	Cost      modelDevCost  `json:"cost"`
 }
 
 type modelDevLimit struct {
@@ -501,8 +501,8 @@ func SyncModelsDevApply(c *gin.Context) {
 // modelDevSyncHandler runs the periodic models.dev catalog sync job.
 type modelDevSyncHandler struct{}
 
-func (modelDevSyncHandler) Type() string         { return model.SystemTaskTypeModelDevSync }
-func (modelDevSyncHandler) Enabled() bool        { return operation_setting.IsModelDevSyncEnabled() }
+func (modelDevSyncHandler) Type() string  { return model.SystemTaskTypeModelDevSync }
+func (modelDevSyncHandler) Enabled() bool { return operation_setting.IsModelDevSyncEnabled() }
 func (modelDevSyncHandler) Interval() time.Duration {
 	hours := operation_setting.GetModelDevSyncIntervalHours()
 	return time.Duration(hours * float64(time.Hour))
