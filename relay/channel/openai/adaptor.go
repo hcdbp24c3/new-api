@@ -18,6 +18,8 @@ import (
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/relay/channel"
 	"github.com/QuantumNous/new-api/relay/channel/ai360"
+	"github.com/QuantumNous/new-api/relay/channel/claude"
+	"github.com/QuantumNous/new-api/relay/channel/gemini"
 	"github.com/QuantumNous/new-api/relay/channel/lingyiwanwu"
 	"github.com/QuantumNous/new-api/relay/channel/openrouter"
 	"github.com/QuantumNous/new-api/relaykit/dto"
@@ -41,6 +43,8 @@ import (
 type Adaptor struct {
 	ChannelType    int
 	ResponseFormat string
+	claudeAdaptor  claude.Adaptor
+	geminiAdaptor  gemini.Adaptor
 }
 
 func (a *Adaptor) ConvertGeminiRequest(c *gin.Context, info *relaycommon.RelayInfo, request *dto.GeminiChatRequest) (any, error) {
@@ -93,6 +97,8 @@ func (a *Adaptor) ConvertClaudeRequest(c *gin.Context, info *relaycommon.RelayIn
 
 func (a *Adaptor) Init(info *relaycommon.RelayInfo) {
 	a.ChannelType = info.ChannelType
+	a.claudeAdaptor.Init(info)
+	a.geminiAdaptor.Init(info)
 
 	// initialize ThinkingContentInfo when thinking_to_content is enabled
 	if info.ChannelSetting.ThinkingToContent {
@@ -830,6 +836,32 @@ func (a *Adaptor) DoResponse(c *gin.Context, resp *http.Response, info *relaycom
 	case relayconstant.RelayModeResponsesCompact:
 		usage, err = OaiResponsesCompactionHandler(c, resp)
 	default:
+		if p := openCodeUpstreamProtocol(info); p != "" && p != openCodeProtocolChat {
+			if p == openCodeProtocolResponses {
+				isSSE := resp != nil && strings.Contains(resp.Header.Get("Content-Type"), "text/event-stream")
+				switch {
+				case info.ForceOpenCodeStreamAgg && isSSE:
+					// ForceOpenCodeStreamAgg means the client asked for non-stream
+					// JSON; flip before the handler + consume log (chat-lane precedent).
+					info.IsStream = false
+					// Override upstream event-stream Content-Type so clients
+					// receive JSON (mirrors OpenCodeSSEToNonStreamHandler).
+					resp.Header.Set("Content-Type", "application/json")
+					usage, err = OaiResponsesToChatBufferedStreamHandler(c, info, resp)
+					return
+				case info.IsStream && isSSE:
+					usage, err = OaiResponsesToChatStreamHandler(c, info, resp)
+					return
+				default:
+					usage, err = OaiResponsesToChatHandler(c, info, resp)
+					return
+				}
+			}
+			if p == openCodeProtocolClaude {
+				return a.claudeAdaptor.DoResponse(c, resp, info)
+			}
+			return a.geminiAdaptor.DoResponse(c, resp, info)
+		}
 		contentType := ""
 		if resp != nil {
 			contentType = resp.Header.Get("Content-Type")
