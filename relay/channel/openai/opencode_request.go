@@ -1,11 +1,45 @@
 package openai
 
 import (
+	"strings"
+
 	"github.com/QuantumNous/new-api/constant"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
+	relayconstant "github.com/QuantumNous/new-api/relay/constant"
 	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/samber/lo"
 )
+
+const (
+	openCodeProtocolChat      = "chat"
+	openCodeProtocolResponses = "responses"
+	openCodeProtocolClaude    = "claude"
+	openCodeProtocolGemini    = "gemini"
+)
+
+// openCodeUpstreamProtocol returns "" unless info is an OpenCode chat-relay request.
+// Otherwise it maps the upstream model to the Zen endpoint family from the
+// official docs table: claude-* → messages, gemini-* → models/{model},
+// gpt-*/grok-*/muse-spark* → responses, everything else → chat completions.
+func openCodeUpstreamProtocol(info *relaycommon.RelayInfo) string {
+	if info == nil || info.ChannelMeta == nil ||
+		info.ChannelType != constant.ChannelTypeOpenCode ||
+		info.RelayMode != relayconstant.RelayModeChatCompletions {
+		return ""
+	}
+	model := info.UpstreamModelName
+	switch {
+	case strings.HasPrefix(model, "claude-"):
+		return openCodeProtocolClaude
+	case strings.HasPrefix(model, "gemini-"):
+		return openCodeProtocolGemini
+	case strings.HasPrefix(model, "gpt-"), strings.HasPrefix(model, "grok-"),
+		strings.HasPrefix(model, "muse-spark"):
+		return openCodeProtocolResponses
+	default:
+		return openCodeProtocolChat
+	}
+}
 
 func prepareOpenCodeFreeTierRequest(info *relaycommon.RelayInfo, request *dto.GeneralOpenAIRequest) {
 	if info == nil || request == nil || info.ChannelMeta == nil {
