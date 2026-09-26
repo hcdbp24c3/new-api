@@ -73,9 +73,11 @@ const (
 	ChannelTypeNousResearch   = 73
 	// VLLM/SGLang are upstream types 62/63; the fork already persisted 62-73
 	// in deployed databases, so they continue here to keep those IDs stable.
-	ChannelTypeVLLM   = 74
-	ChannelTypeSGLang = 75
-	ChannelTypeDummy  // this one is only for count, do not add any channel after this
+	ChannelTypeVLLM        = 74
+	ChannelTypeSGLang      = 75
+	ChannelTypeLiteLLM     = 76
+	ChannelTypeCliproxyAPI = 77
+	ChannelTypeDummy       // this one is only for count, do not add any channel after this
 
 )
 
@@ -158,6 +160,8 @@ var ChannelBaseURLs = []string{
 	"https://inference-api.nousresearch.com/v1", //73
 	"", //74
 	"", //75
+	"", //76
+	"", //77
 }
 
 func GetChannelBaseURL(channelType int) string {
@@ -240,6 +244,8 @@ var ChannelTypeNames = map[int]string{
 	ChannelTypeNousResearch:   "Nous Research",
 	ChannelTypeVLLM:           "vLLM",
 	ChannelTypeSGLang:         "SGLang",
+	ChannelTypeLiteLLM:        "LiteLLM",
+	ChannelTypeCliproxyAPI:    "CLIProxyAPI",
 }
 
 func GetChannelTypeName(channelType int) string {
@@ -276,7 +282,7 @@ var ChannelSpecialBases = map[string]ChannelSpecialBase{
 // IsAdvancedCustomChannel includes named channels backed by route presets.
 func IsAdvancedCustomChannel(channelType int) bool {
 	switch channelType {
-	case ChannelTypeAdvancedCustom, ChannelTypeVLLM, ChannelTypeSGLang:
+	case ChannelTypeAdvancedCustom, ChannelTypeVLLM, ChannelTypeSGLang, ChannelTypeLiteLLM, ChannelTypeCliproxyAPI:
 		return true
 	default:
 		return false

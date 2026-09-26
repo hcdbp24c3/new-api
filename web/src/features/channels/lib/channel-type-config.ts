@@ -20,6 +20,8 @@ import {
   CHANNEL_TYPES,
   CHANNEL_TYPE_VLLM,
   CHANNEL_TYPE_SGLANG,
+  CHANNEL_TYPE_LITELLM,
+  CHANNEL_TYPE_CLIPROXYAPI,
 } from '../constants'
 
 // ============================================================================
@@ -66,6 +68,27 @@ export const CHANNEL_TYPE_CONFIGS: Record<number, ChannelTypeConfig> = {
     hints: {
       baseUrl: 'vLLM server address, without /v1',
       key: 'vLLM API key, or EMPTY if authentication is disabled',
+      models: 'Models fetched from upstream /v1/models',
+    },
+  },
+  [CHANNEL_TYPE_LITELLM]: {
+    id: CHANNEL_TYPE_LITELLM,
+    name: CHANNEL_TYPES[CHANNEL_TYPE_LITELLM],
+    icon: 'OpenAI',
+    hints: {
+      baseUrl:
+        'LiteLLM proxy address, without /v1 (e.g. http://localhost:4000)',
+      key: 'LiteLLM API key, or EMPTY if authentication is disabled',
+      models: 'Models fetched from upstream /v1/models',
+    },
+  },
+  [CHANNEL_TYPE_CLIPROXYAPI]: {
+    id: CHANNEL_TYPE_CLIPROXYAPI,
+    name: CHANNEL_TYPES[CHANNEL_TYPE_CLIPROXYAPI],
+    icon: 'OpenAI',
+    hints: {
+      baseUrl: 'CLIProxyAPI address, without /v1 (e.g. http://localhost:8317)',
+      key: 'CLIProxyAPI api-keys value, or EMPTY if authentication is disabled',
       models: 'Models fetched from upstream /v1/models',
     },
   },

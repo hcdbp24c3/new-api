@@ -118,6 +118,60 @@ func TestSGLangRerankRequestAndResponse(t *testing.T) {
 	assert.Zero(t, decoded.Usage.CompletionTokens)
 }
 
+func TestLiteLLMAndCliproxyChannelRegistration(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		typeID   int
+		wantName string
+	}{
+		{"litellm", constant.ChannelTypeLiteLLM, "LiteLLM"},
+		{"cliproxyapi", constant.ChannelTypeCliproxyAPI, "CLIProxyAPI"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			apiType, ok := common.ChannelType2APIType(tc.typeID)
+			require.True(t, ok)
+			adaptor := relay.GetAdaptor(apiType)
+			require.NotNil(t, adaptor)
+			assert.Equal(t, "advanced_custom", adaptor.GetChannelName())
+
+			require.True(t, constant.IsAdvancedCustomChannel(tc.typeID))
+			preset := common.GetAdvancedCustomPreset(tc.typeID)
+			require.NotNil(t, preset)
+			require.NotEmpty(t, preset.Routes)
+			for _, route := range preset.Routes {
+				assert.NotEqual(t, dto.AdvancedCustomConverterSGLangRerank, route.Converter)
+			}
+
+			eps := common.GetEndpointTypesByChannelType(tc.typeID, "any-model")
+			assert.Contains(t, eps, constant.EndpointTypeOpenAI)
+			assert.Contains(t, eps, constant.EndpointTypeAnthropic)
+			assert.Contains(t, eps, constant.EndpointTypeOpenAIResponse)
+
+			info := &relaycommon.RelayInfo{ChannelMeta: &relaycommon.ChannelMeta{
+				ChannelType:    tc.typeID,
+				ChannelBaseUrl: "http://localhost:9999",
+				ApiKey:         "test-key",
+			}}
+			info.ChannelOtherSettings.AdvancedCustom = preset
+			a := &advancedcustom.Adaptor{}
+			a.Init(info)
+			info.RequestURLPath = "/v1/chat/completions"
+			url, err := a.GetRequestURL(info)
+			require.NoError(t, err)
+			assert.Equal(t, "http://localhost:9999/v1/chat/completions", url)
+			headers := http.Header{}
+			c, _ := gin.CreateTestContext(httptest.NewRecorder())
+			c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+			require.NoError(t, a.SetupRequestHeader(c, &headers, info))
+			assert.Equal(t, "Bearer test-key", headers.Get("Authorization"))
+
+			assert.Equal(t, tc.wantName, constant.GetChannelTypeName(tc.typeID))
+			require.Greater(t, len(constant.ChannelBaseURLs), tc.typeID)
+			assert.Empty(t, constant.ChannelBaseURLs[tc.typeID])
+		})
+	}
+}
+
 func TestSGLangRerankRejectsMalformedResults(t *testing.T) {
 	for _, body := range []string{`null`, `{}`, `[{"index":99,"score":1}]`, `[{"index":-1,"score":0}]`, `[{"index":0}]`, `[{"score":1}]`} {
 		t.Run(body, func(t *testing.T) {

@@ -87,26 +87,34 @@ func TestValidateChannelProxy(t *testing.T) {
 
 func TestValidateChannelRequiresNewAPIBaseURL(t *testing.T) {
 	tests := []struct {
-		name    string
-		baseURL *string
-		wantErr bool
+		name        string
+		channelType int
+		wantErrText string
+		baseURL     *string
+		wantErr     bool
 	}{
-		{name: "missing", wantErr: true},
-		{name: "blank", baseURL: common.GetPointer("  "), wantErr: true},
-		{name: "configured", baseURL: common.GetPointer("https://new-api.example")},
+		{name: "new-api missing", channelType: constant.ChannelTypeNewAPI, wantErrText: "New API channel base URL cannot be empty", wantErr: true},
+		{name: "new-api blank", channelType: constant.ChannelTypeNewAPI, wantErrText: "New API channel base URL cannot be empty", baseURL: common.GetPointer("  "), wantErr: true},
+		{name: "new-api configured", channelType: constant.ChannelTypeNewAPI, wantErrText: "New API channel base URL cannot be empty", baseURL: common.GetPointer("https://new-api.example")},
+		{name: "litellm missing", channelType: constant.ChannelTypeLiteLLM, wantErrText: "LiteLLM channel base URL cannot be empty", wantErr: true},
+		{name: "litellm blank", channelType: constant.ChannelTypeLiteLLM, wantErrText: "LiteLLM channel base URL cannot be empty", baseURL: common.GetPointer("  "), wantErr: true},
+		{name: "litellm configured", channelType: constant.ChannelTypeLiteLLM, wantErrText: "LiteLLM channel base URL cannot be empty", baseURL: common.GetPointer("http://localhost:4000")},
+		{name: "cliproxyapi missing", channelType: constant.ChannelTypeCliproxyAPI, wantErrText: "CLIProxyAPI channel base URL cannot be empty", wantErr: true},
+		{name: "cliproxyapi blank", channelType: constant.ChannelTypeCliproxyAPI, wantErrText: "CLIProxyAPI channel base URL cannot be empty", baseURL: common.GetPointer("  "), wantErr: true},
+		{name: "cliproxyapi configured", channelType: constant.ChannelTypeCliproxyAPI, wantErrText: "CLIProxyAPI channel base URL cannot be empty", baseURL: common.GetPointer("http://localhost:8317")},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			channel := &model.Channel{
-				Type:    constant.ChannelTypeNewAPI,
+				Type:    test.channelType,
 				BaseURL: test.baseURL,
 			}
 
 			err := validateChannel(channel, false)
 
 			if test.wantErr {
-				require.ErrorContains(t, err, "New API channel base URL cannot be empty")
+				require.ErrorContains(t, err, test.wantErrText)
 				return
 			}
 			require.NoError(t, err)

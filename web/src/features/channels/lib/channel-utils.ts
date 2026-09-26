@@ -107,6 +107,8 @@ export function getChannelTypeIcon(type: number): string {
     73: 'NousResearch', // Nous Research
     74: 'Vllm', // vLLM
     75: 'SGLang', // SGLang
+    76: 'OpenAI', // LiteLLM
+    77: 'OpenAI', // CLIProxyAPI
 
     // Image/Video generation
     2: 'Midjourney', // MjProxy
@@ -302,7 +304,9 @@ export function stripModelPrefix(modelName: string, prefix: string): string {
  * Read the per-channel model prefix from a channel's `settings` JSON.
  * Returns the trimmed prefix, or '' when unset/unparseable.
  */
-export function getChannelModelPrefix(channel: Pick<Channel, 'settings'>): string {
+export function getChannelModelPrefix(
+  channel: Pick<Channel, 'settings'>
+): string {
   const otherSettings = parseChannelOtherSettings(channel?.settings)
   return (otherSettings.model_prefix || '').trim()
 }

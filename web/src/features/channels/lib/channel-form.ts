@@ -25,6 +25,8 @@ import {
   CHANNEL_TYPE_TASK_PLUGIN,
   CHANNEL_TYPE_VLLM,
   CHANNEL_TYPE_SGLANG,
+  CHANNEL_TYPE_LITELLM,
+  CHANNEL_TYPE_CLIPROXYAPI,
   CHANNEL_STATUS,
   ERROR_MESSAGES,
   FIELD_PASSTHROUGH_TYPES,
@@ -308,6 +310,8 @@ export const channelFormSchema = z
         CHANNEL_TYPE_TASK_PLUGIN,
         CHANNEL_TYPE_VLLM,
         CHANNEL_TYPE_SGLANG,
+        CHANNEL_TYPE_LITELLM,
+        CHANNEL_TYPE_CLIPROXYAPI,
       ].includes(data.type) &&
       !data.base_url?.trim()
     ) {
@@ -634,7 +638,8 @@ export function transformChannelToFormDefaults(
         }
         for (const [key, value] of entries) {
           if (key.startsWith(modelPrefix + '/')) {
-            strippedModelMap[key.substring(modelPrefix.length + 1)] = value as string
+            strippedModelMap[key.substring(modelPrefix.length + 1)] =
+              value as string
           }
         }
         modelMappingForDisplay = JSON.stringify(strippedModelMap)
@@ -886,7 +891,8 @@ function buildSettingsJSON(formData: ChannelFormValues): string {
   }
 
   // Per-channel model prefix
-  const rawPrefix = typeof formData.model_prefix === 'string' ? formData.model_prefix : ''
+  const rawPrefix =
+    typeof formData.model_prefix === 'string' ? formData.model_prefix : ''
   const modelPrefix = rawPrefix.trim()
   if (modelPrefix) {
     settingsObj.model_prefix = modelPrefix

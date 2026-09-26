@@ -7,7 +7,10 @@ import (
 
 // GetAdvancedCustomPreset returns fresh defaults.
 func GetAdvancedCustomPreset(channelType int) *dto.AdvancedCustomConfig {
-	if channelType != constant.ChannelTypeVLLM && channelType != constant.ChannelTypeSGLang {
+	switch channelType {
+	case constant.ChannelTypeVLLM, constant.ChannelTypeSGLang,
+		constant.ChannelTypeLiteLLM, constant.ChannelTypeCliproxyAPI:
+	default:
 		return nil
 	}
 	config := &dto.AdvancedCustomConfig{}

@@ -33,6 +33,10 @@ export const CHANNEL_TYPE_VLLM = 74
 
 export const CHANNEL_TYPE_SGLANG = 75
 
+export const CHANNEL_TYPE_LITELLM = 76
+
+export const CHANNEL_TYPE_CLIPROXYAPI = 77
+
 export const CHANNEL_TYPES = {
   0: 'Unknown',
   1: 'OpenAI',
@@ -106,6 +110,8 @@ export const CHANNEL_TYPES = {
   73: 'Nous Research',
   74: 'vLLM',
   75: 'SGLang',
+  76: 'LiteLLM',
+  77: 'CLIProxyAPI',
 } as const
 
 export type ChannelProviderPresentation = {
@@ -192,16 +198,14 @@ export const CHANNEL_PROVIDER_PRESENTATION: Partial<
       'Access open models through HuggingFace Router (OpenAI-compatible)',
   },
   63: {
-    descriptionKey:
-      'Connect to Xiaomi MiMo model services (OpenAI-compatible)',
+    descriptionKey: 'Connect to Xiaomi MiMo model services (OpenAI-compatible)',
   },
   64: {
     descriptionKey:
       'Access Meta AI models including Llama and Muse Spark (OpenAI-compatible)',
   },
   65: {
-    descriptionKey:
-      'Connect to SenseNova model services (OpenAI-compatible)',
+    descriptionKey: 'Connect to SenseNova model services (OpenAI-compatible)',
   },
   66: {
     descriptionKey:
@@ -237,15 +241,18 @@ export const CHANNEL_PROVIDER_PRESENTATION: Partial<
   },
   74: { descriptionKey: 'Connect to self-hosted models served by vLLM' },
   75: { descriptionKey: 'Connect to self-hosted models served by SGLang' },
+  76: { descriptionKey: 'Connect to a LiteLLM proxy gateway' },
+  77: { descriptionKey: 'Connect to a CLIProxyAPI proxy gateway' },
 } satisfies Record<
   Exclude<keyof typeof CHANNEL_TYPES, 0 | typeof CHANNEL_TYPE_TASK_PLUGIN>,
   ChannelProviderPresentation
 >
 
 const CHANNEL_TYPE_DISPLAY_ORDER: number[] = [
-  1, 14, 24, 33, 43, 3, 41, 17, 45, 25, 26, 23, 48, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 60, 58, 59, 61, 42, 34, 20,
-  4, 40, 27, 15, 46, 18, 31, 35, 49, 19, 47, 37, 38, 39, 11, 8, 57, 22, 21, 44,
-  2, 5, 36, 50, 51, 52, 53, 54, 55, 56,
+  1, 14, 24, 33, 43, 3, 41, 17, 45, 25, 26, 23, 48, 62, 63, 64, 65, 66, 67, 68,
+  69, 70, 71, 72, 73, 74, 75, 76, 77, 60, 58, 59, 61, 42, 34, 20, 4, 40, 27, 15,
+  46, 18, 31, 35, 49, 19, 47, 37, 38, 39, 11, 8, 57, 22, 21, 44, 2, 5, 36, 50,
+  51, 52, 53, 54, 55, 56,
 ]
 
 export const CHANNEL_TYPE_OPTIONS: { value: number; label: string }[] = (() => {
@@ -637,7 +644,10 @@ export const CHANNEL_BASE_URL_OPTIONS: Record<number, BaseURLOption[]> = {
   70: [
     // VolcEngine API
     { value: 'https://ark.cn-beijing.volces.com/api/v3', label: 'Ark CN' },
-    { value: 'https://ark.ap-southeast.bytepluses.com/api/v3', label: 'Ark SG' },
+    {
+      value: 'https://ark.ap-southeast.bytepluses.com/api/v3',
+      label: 'Ark SG',
+    },
   ],
   72: [
     // FreeModel
@@ -651,10 +661,44 @@ export const CHANNEL_BASE_URL_OPTIONS: Record<number, BaseURLOption[]> = {
 // ============================================================================
 
 export const MODEL_FETCHABLE_TYPES = new Set([
-  1, 4, 14, 17, 20, 23, 24, 25, 26, 27, 31, 34, 35, 40, 42, 43, 47, 48, 57, 58,
-  59, 60, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73,
+  1,
+  4,
+  14,
+  17,
+  20,
+  23,
+  24,
+  25,
+  26,
+  27,
+  31,
+  34,
+  35,
+  40,
+  42,
+  43,
+  47,
+  48,
+  57,
+  58,
+  59,
+  60,
+  62,
+  63,
+  64,
+  65,
+  66,
+  67,
+  68,
+  69,
+  70,
+  71,
+  72,
+  73,
   CHANNEL_TYPE_VLLM,
   CHANNEL_TYPE_SGLANG,
+  CHANNEL_TYPE_LITELLM,
+  CHANNEL_TYPE_CLIPROXYAPI,
 ])
 
 export const FIELD_PASSTHROUGH_TYPES = new Set([
@@ -666,6 +710,8 @@ export const FIELD_PASSTHROUGH_TYPES = new Set([
   CHANNEL_TYPE_NEW_API,
   CHANNEL_TYPE_VLLM,
   CHANNEL_TYPE_SGLANG,
+  CHANNEL_TYPE_LITELLM,
+  CHANNEL_TYPE_CLIPROXYAPI,
 ])
 
 export const OPENAI_FIELD_PASSTHROUGH_TYPES = new Set([
@@ -676,6 +722,8 @@ export const OPENAI_FIELD_PASSTHROUGH_TYPES = new Set([
   CHANNEL_TYPE_NEW_API,
   CHANNEL_TYPE_VLLM,
   CHANNEL_TYPE_SGLANG,
+  CHANNEL_TYPE_LITELLM,
+  CHANNEL_TYPE_CLIPROXYAPI,
 ])
 
 export const CLAUDE_FIELD_PASSTHROUGH_TYPES = new Set([
@@ -685,6 +733,8 @@ export const CLAUDE_FIELD_PASSTHROUGH_TYPES = new Set([
   CHANNEL_TYPE_NEW_API,
   CHANNEL_TYPE_VLLM,
   CHANNEL_TYPE_SGLANG,
+  CHANNEL_TYPE_LITELLM,
+  CHANNEL_TYPE_CLIPROXYAPI,
 ])
 
 export const TYPE_TO_KEY_PROMPT: Record<number, string> = {
@@ -711,6 +761,8 @@ export const TYPE_TO_KEY_PROMPT: Record<number, string> = {
   73: 'Format: nous-... (Nous Research API key)',
   74: 'vLLM API key, or EMPTY if authentication is disabled',
   75: 'SGLang API key, or EMPTY if authentication is disabled',
+  76: 'LiteLLM API key, or EMPTY if authentication is disabled',
+  77: 'CLIProxyAPI api-keys value, or EMPTY if authentication is disabled',
 }
 
 export const CHANNEL_TYPE_WARNINGS: Record<number, string> = {

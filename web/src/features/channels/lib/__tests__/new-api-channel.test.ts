@@ -23,6 +23,8 @@ import {
   CHANNEL_TYPE_NEW_API,
   CHANNEL_TYPE_VLLM,
   CHANNEL_TYPE_SGLANG,
+  CHANNEL_TYPE_LITELLM,
+  CHANNEL_TYPE_CLIPROXYAPI,
   CHANNEL_TYPE_OPTIONS,
   MODEL_FETCHABLE_TYPES,
 } from '../../constants'
@@ -105,9 +107,32 @@ describe('New API channel', () => {
 })
 
 describe.each([
-  { type: CHANNEL_TYPE_VLLM, name: 'vLLM', icon: 'Vllm' },
-  { type: CHANNEL_TYPE_SGLANG, name: 'SGLang', icon: 'SGLang' },
-])('$name channel', ({ type, name, icon }) => {
+  {
+    type: CHANNEL_TYPE_VLLM,
+    name: 'vLLM',
+    icon: 'Vllm',
+    keyPrompt: 'vLLM API key, or EMPTY if authentication is disabled',
+  },
+  {
+    type: CHANNEL_TYPE_SGLANG,
+    name: 'SGLang',
+    icon: 'SGLang',
+    keyPrompt: 'SGLang API key, or EMPTY if authentication is disabled',
+  },
+  {
+    type: CHANNEL_TYPE_LITELLM,
+    name: 'LiteLLM',
+    icon: 'OpenAI',
+    keyPrompt: 'LiteLLM API key, or EMPTY if authentication is disabled',
+  },
+  {
+    type: CHANNEL_TYPE_CLIPROXYAPI,
+    name: 'CLIProxyAPI',
+    icon: 'OpenAI',
+    keyPrompt:
+      'CLIProxyAPI api-keys value, or EMPTY if authentication is disabled',
+  },
+])('$name channel', ({ type, name, icon, keyPrompt }) => {
   test('can be selected and discover served models', () => {
     expect(CHANNEL_TYPE_OPTIONS).toContainEqual({
       value: type,
@@ -116,9 +141,7 @@ describe.each([
     expect(MODEL_FETCHABLE_TYPES.has(type)).toBe(true)
     expect(getChannelTypeIcon(type)).toBe(icon)
     expect(getChannelTypeConfig(type).icon).toBe(icon)
-    expect(getKeyPromptForType(type)).toBe(
-      `${name} API key, or EMPTY if authentication is disabled`
-    )
+    expect(getKeyPromptForType(type)).toBe(keyPrompt)
   })
 
   test('requires an upstream address and submits the served model name', () => {
