@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
@@ -35,6 +36,7 @@ func OaiStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Re
 	var containStreamUsage bool
 	var responseTextBuilder strings.Builder
 	var toolCount int
+	var hasContent bool
 	var usage = &dto.Usage{}
 	var lastStreamData string
 	var secondLastStreamData string // 保留倒数第二个stream data；部分兼容网关把完整usage放在倒数第二个事件
@@ -54,7 +56,7 @@ func OaiStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Re
 			}
 
 			lastStreamData = data
-			observeStreamChoices(info, data, seenStreamToolCalls, &streamFunctionCallNames)
+			hasContent = hasContent || observeStreamChoices(info, data, seenStreamToolCalls, &streamFunctionCallNames)
 			if err := processTokenData(info, data, &responseTextBuilder, &toolCount); err != nil {
 				logger.LogError(c, "error processing stream token data: "+err.Error())
 				sr.Error(err)
@@ -67,16 +69,21 @@ func OaiStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Re
 	// 上游在未写出任何可用内容时结束（空响应/仅角色或垃圾事件）：
 	// 返回可重试错误，让重试循环换 key/渠道重发，避免向客户端返回 200 + 空流。
 	outcome := info.StreamStatus.ResponseOutcome()
-	usableStream := responseTextBuilder.Len() > 0 || toolCount > 0
-	retryableEnd := info.StreamStatus.EndReason == relaycommon.StreamEndReasonEOF ||
-		info.StreamStatus.EndReason == relaycommon.StreamEndReasonScannerErr ||
-		info.StreamStatus.EndReason == relaycommon.StreamEndReasonTimeout ||
-		info.StreamStatus.EndReason == relaycommon.StreamEndReasonDone
+	// responseTextBuilder/toolCount 仅在 chat/completions 模式下累积；其他模式
+	// （如 Claude 格式的 RelayModeUnknown）靠 observeStreamChoices 的 hasContent 判定可用内容。
+	usableStream := responseTextBuilder.Len() > 0 || toolCount > 0 || hasContent
+	retryableEnd := slices.Contains([]relaycommon.StreamEndReason{
+		relaycommon.StreamEndReasonEOF,
+		relaycommon.StreamEndReasonScannerErr,
+		relaycommon.StreamEndReasonTimeout,
+		relaycommon.StreamEndReasonDone,
+	}, info.StreamStatus.EndReason)
 	if !usableStream && retryableEnd &&
-		(outcome == string(relaycommon.ResponseOutcomeUnknown) || outcome == string(relaycommon.ResponseOutcomeFailed)) &&
+		slices.Contains([]string{string(relaycommon.ResponseOutcomeUnknown), string(relaycommon.ResponseOutcomeFailed)}, outcome) &&
 		!c.Writer.Written() {
 		// SSE 头已设置过 Content-Type；覆盖为 JSON，避免最终 502 响应头撒谎。
-		// 下次尝试的 SetEventStreamHeaders 会重新写回 text/event-stream。
+		// 下次尝试渲染 SSE 时 common.CustomEvent.WriteContentType 会无条件改回 text/event-stream
+		// （SetEventStreamHeaders 因 event_stream_headers_set 标志不会重写）。
 		c.Header("Content-Type", "application/json; charset=utf-8")
 		return nil, types.NewOpenAIError(
 			fmt.Errorf("upstream stream ended without usable data (reason=%s, received=%d)",
@@ -137,13 +144,21 @@ func OaiStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Re
 }
 
 // observeStreamChoices collects billable function call names and records the
-// finish reason facts used by health sampling from one parsed chunk.
-func observeStreamChoices(info *relaycommon.RelayInfo, data string, seen map[string]struct{}, names *[]string) {
+// finish reason facts used by health sampling from one parsed chunk. It reports
+// whether any choice carried usable content (text, reasoning or tool calls) so
+// stream usability can be judged independent of RelayMode.
+func observeStreamChoices(info *relaycommon.RelayInfo, data string, seen map[string]struct{}, names *[]string) bool {
 	var streamResponse dto.ChatCompletionsStreamResponse
 	if err := common.UnmarshalJsonStr(data, &streamResponse); err != nil {
-		return
+		return false
 	}
+	hasContent := false
 	for _, choice := range streamResponse.Choices {
+		if choice.Delta.GetContentString() != "" ||
+			choice.Delta.GetReasoningContent() != "" ||
+			len(choice.Delta.ToolCalls) > 0 {
+			hasContent = true
+		}
 		if choice.FinishReason != nil && *choice.FinishReason != "" {
 			if *choice.FinishReason == constant.FinishReasonContentFilter {
 				info.PerformanceBusinessRejection = true
@@ -186,6 +201,7 @@ func observeStreamChoices(info *relaycommon.RelayInfo, data string, seen map[str
 			*names = append(*names, name)
 		}
 	}
+	return hasContent
 }
 
 func OpenaiHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Response) (*dto.Usage, *types.NewAPIError) {
