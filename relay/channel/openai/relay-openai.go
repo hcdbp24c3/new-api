@@ -64,6 +64,26 @@ func OaiStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Re
 
 	info.StreamStatus.RequireTerminal()
 
+	// 上游在未写出任何可用内容时结束（空响应/仅角色或垃圾事件）：
+	// 返回可重试错误，让重试循环换 key/渠道重发，避免向客户端返回 200 + 空流。
+	outcome := info.StreamStatus.ResponseOutcome()
+	usableStream := responseTextBuilder.Len() > 0 || toolCount > 0
+	retryableEnd := info.StreamStatus.EndReason == relaycommon.StreamEndReasonEOF ||
+		info.StreamStatus.EndReason == relaycommon.StreamEndReasonScannerErr ||
+		info.StreamStatus.EndReason == relaycommon.StreamEndReasonTimeout ||
+		info.StreamStatus.EndReason == relaycommon.StreamEndReasonDone
+	if !usableStream && retryableEnd &&
+		(outcome == string(relaycommon.ResponseOutcomeUnknown) || outcome == string(relaycommon.ResponseOutcomeFailed)) &&
+		!c.Writer.Written() {
+		// SSE 头已设置过 Content-Type；覆盖为 JSON，避免最终 502 响应头撒谎。
+		// 下次尝试的 SetEventStreamHeaders 会重新写回 text/event-stream。
+		c.Header("Content-Type", "application/json; charset=utf-8")
+		return nil, types.NewOpenAIError(
+			fmt.Errorf("upstream stream ended without usable data (reason=%s, received=%d)",
+				info.StreamStatus.EndReason, info.ReceivedResponseCount),
+			types.ErrorCodeBadResponse, http.StatusBadGateway)
+	}
+
 	// 处理最后的响应
 	shouldSendLastResp := true
 	if err := handleLastResponse(lastStreamData, &responseId, &createAt, &systemFingerprint, &model, &usage,
