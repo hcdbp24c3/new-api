@@ -86,6 +86,70 @@ func TestOaiStreamHandlerEmptyStreamReturnsRetryable502(t *testing.T) {
 	}
 }
 
+// MiniMax reports failures as HTTP 200 + an SSE event carrying base_resp and no
+// choices/content, then closes. The empty-stream guard must still fire, and its
+// message must carry the upstream status_code/status_msg so the client and the
+// admin log say why the attempt failed instead of only "no usable data".
+func TestOaiStreamHandlerBaseRespErrorReportsUpstreamMessage(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		body         string
+		wantParts    []string
+		wantNoParts  []string
+		wantAdminErr string
+	}{
+		{
+			name: "insufficient balance",
+			body: `data: {"choices":null,"object":"chat.completion","base_resp":{"status_code":1008,"status_msg":"insufficient balance"}}` + "\n\n",
+			wantParts: []string{
+				"code=1008", "insufficient balance", "reason=", "received=1",
+			},
+			wantAdminErr: "1008",
+		},
+		{
+			name: "unusable token",
+			body: `data: {"base_resp":{"status_code":1004,"status_msg":"token is unusable"}}` + "\n\n",
+			wantParts: []string{
+				"code=1004", "token is unusable",
+			},
+			wantAdminErr: "1004",
+		},
+		{
+			name: "success envelope is not an error",
+			body: `data: {"choices":null,"base_resp":{"status_code":0,"status_msg":""}}` + "\n\n",
+			wantParts: []string{
+				"upstream stream ended without usable data",
+			},
+			wantNoParts: []string{"code=0"},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c, recorder, info, resp := newStreamGuardFixture(t, tc.body, false)
+			usage, err := OaiStreamHandler(c, info, resp)
+			require.NotNil(t, err, "base_resp failure must fail over instead of returning 200 + empty SSE")
+			require.Nil(t, usage)
+			assert.Equal(t, http.StatusBadGateway, err.StatusCode)
+			assert.Equal(t, types.ErrorCodeBadResponse, err.GetErrorCode())
+			for _, part := range tc.wantParts {
+				assert.Contains(t, err.Error(), part)
+			}
+			for _, part := range tc.wantNoParts {
+				assert.NotContains(t, err.Error(), part)
+			}
+			assert.Zero(t, recorder.Body.Len(), "guard must fire before any byte is written")
+			assert.Equal(t, "application/json; charset=utf-8", recorder.Header().Get("Content-Type"),
+				"guard must rewrite the SSE Content-Type so the 502 header does not lie")
+			if tc.wantAdminErr != "" {
+				require.True(t, info.StreamStatus.HasErrors(), "admin log must record the upstream base_resp error")
+				require.NotEmpty(t, info.StreamStatus.Errors)
+				assert.Contains(t, info.StreamStatus.Errors[0].Message, tc.wantAdminErr)
+			} else {
+				assert.False(t, info.StreamStatus.HasErrors(), "status_code 0 must not be recorded as an error")
+			}
+		})
+	}
+}
+
 // The outcome==completed shield keeps a finish_reason-only stream (no content)
 // from being converted into a 502 by the empty-stream guard. A single data
 // event only: with a second event the deferred-write flush would set

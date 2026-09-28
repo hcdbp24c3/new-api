@@ -42,6 +42,9 @@ func OaiStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Re
 	var secondLastStreamData string // 保留倒数第二个stream data；部分兼容网关把完整usage放在倒数第二个事件
 	seenStreamToolCalls := make(map[string]struct{})
 	var streamFunctionCallNames []string
+	// 上游以 HTTP 200 + SSE 事件携带 base_resp 上报的错误（MiniMax 等），非空时
+	// 空流守卫改用精确文案，便于客户端与管理员日志定位失败原因。
+	var upstreamStreamErr string
 
 	helper.StreamScannerHandler(c, resp, info, func(data string, sr *helper.StreamResult) {
 		if lastStreamData != "" {
@@ -56,7 +59,7 @@ func OaiStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Re
 			}
 
 			lastStreamData = data
-			hasContent = hasContent || observeStreamChoices(info, data, seenStreamToolCalls, &streamFunctionCallNames)
+			hasContent = hasContent || observeStreamChoices(info, data, seenStreamToolCalls, &streamFunctionCallNames, &upstreamStreamErr)
 			if err := processTokenData(info, data, &responseTextBuilder, &toolCount); err != nil {
 				logger.LogError(c, "error processing stream token data: "+err.Error())
 				sr.Error(err)
@@ -85,6 +88,12 @@ func OaiStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Re
 		// 下次尝试渲染 SSE 时 common.CustomEvent.WriteContentType 会无条件改回 text/event-stream
 		// （SetEventStreamHeaders 因 event_stream_headers_set 标志不会重写）。
 		c.Header("Content-Type", "application/json; charset=utf-8")
+		if upstreamStreamErr != "" {
+			return nil, types.NewOpenAIError(
+				fmt.Errorf("upstream stream error (%s, reason=%s, received=%d)",
+					upstreamStreamErr, info.StreamStatus.EndReason, info.ReceivedResponseCount),
+				types.ErrorCodeBadResponse, http.StatusBadGateway)
+		}
 		return nil, types.NewOpenAIError(
 			fmt.Errorf("upstream stream ended without usable data (reason=%s, received=%d)",
 				info.StreamStatus.EndReason, info.ReceivedResponseCount),
@@ -146,11 +155,19 @@ func OaiStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Re
 // observeStreamChoices collects billable function call names and records the
 // finish reason facts used by health sampling from one parsed chunk. It reports
 // whether any choice carried usable content (text, reasoning or tool calls) so
-// stream usability can be judged independent of RelayMode.
-func observeStreamChoices(info *relaycommon.RelayInfo, data string, seen map[string]struct{}, names *[]string) bool {
+// stream usability can be judged independent of RelayMode. When the chunk carries
+// a non-zero base_resp envelope the upstream status is recorded on info.StreamStatus
+// and, if baseRespErr is non-nil, formatted into it for the empty-stream guard.
+func observeStreamChoices(info *relaycommon.RelayInfo, data string, seen map[string]struct{}, names *[]string, baseRespErr *string) bool {
 	var streamResponse dto.ChatCompletionsStreamResponse
 	if err := common.UnmarshalJsonStr(data, &streamResponse); err != nil {
 		return false
+	}
+	if br := streamResponse.BaseResp; br != nil && br.StatusCode != 0 {
+		if baseRespErr != nil {
+			*baseRespErr = fmt.Sprintf("code=%d, msg=%s", br.StatusCode, br.StatusMsg)
+		}
+		info.StreamStatus.RecordError(fmt.Sprintf("upstream base_resp error %d: %s", br.StatusCode, br.StatusMsg))
 	}
 	hasContent := false
 	for _, choice := range streamResponse.Choices {
