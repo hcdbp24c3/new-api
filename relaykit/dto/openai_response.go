@@ -38,14 +38,22 @@ type OpenAITextResponseChoice struct {
 	FinishReason string `json:"finish_reason"`
 }
 
+// BaseResp mirrors the MiniMax response envelope (relay/channel/minimax/image.go).
+// status_code != 0 signals an upstream error delivered inside an HTTP 200 body.
+type BaseResp struct {
+	StatusCode int    `json:"status_code"`
+	StatusMsg  string `json:"status_msg"`
+}
+
 type OpenAITextResponse struct {
-	Id      string                     `json:"id"`
-	Model   string                     `json:"model"`
-	Object  string                     `json:"object"`
-	Created any                        `json:"created"`
-	Choices []OpenAITextResponseChoice `json:"choices"`
-	Error   any                        `json:"error,omitempty"`
-	Usage   `json:"usage"`
+	Id       string                     `json:"id"`
+	Model    string                     `json:"model"`
+	Object   string                     `json:"object"`
+	Created  any                        `json:"created"`
+	Choices  []OpenAITextResponseChoice `json:"choices"`
+	Error    any                        `json:"error,omitempty"`
+	BaseResp *BaseResp                  `json:"base_resp,omitempty"`
+	Usage    `json:"usage"`
 }
 
 // GetOpenAIError 从动态错误类型中提取OpenAIError结构
@@ -151,6 +159,7 @@ type ChatCompletionsStreamResponse struct {
 	Model             string                                `json:"model"`
 	SystemFingerprint *string                               `json:"system_fingerprint"`
 	Choices           []ChatCompletionsStreamResponseChoice `json:"choices"`
+	BaseResp          *BaseResp                             `json:"base_resp,omitempty"`
 	Usage             *Usage                                `json:"usage"`
 }
 
@@ -191,6 +200,11 @@ func (c *ChatCompletionsStreamResponse) ClearToolCalls() {
 func (c *ChatCompletionsStreamResponse) Copy() *ChatCompletionsStreamResponse {
 	choices := make([]ChatCompletionsStreamResponseChoice, len(c.Choices))
 	copy(choices, c.Choices)
+	var baseResp *BaseResp
+	if c.BaseResp != nil {
+		copied := *c.BaseResp
+		baseResp = &copied
+	}
 	return &ChatCompletionsStreamResponse{
 		Id:                c.Id,
 		Object:            c.Object,
@@ -198,6 +212,7 @@ func (c *ChatCompletionsStreamResponse) Copy() *ChatCompletionsStreamResponse {
 		Model:             c.Model,
 		SystemFingerprint: c.SystemFingerprint,
 		Choices:           choices,
+		BaseResp:          baseResp,
 		Usage:             c.Usage,
 	}
 }
