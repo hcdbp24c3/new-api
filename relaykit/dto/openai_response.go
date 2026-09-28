@@ -38,7 +38,7 @@ type OpenAITextResponseChoice struct {
 	FinishReason string `json:"finish_reason"`
 }
 
-// BaseResp mirrors the MiniMax response envelope (relay/channel/minimax/image.go).
+// BaseResp mirrors the MiniMax response envelope.
 // status_code != 0 signals an upstream error delivered inside an HTTP 200 body.
 type BaseResp struct {
 	StatusCode int    `json:"status_code"`
