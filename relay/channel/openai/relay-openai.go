@@ -255,6 +255,10 @@ func OpenaiHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Respo
 		return nil, types.WithOpenAIError(*oaiError, resp.StatusCode)
 	}
 
+	if br := simpleResponse.BaseResp; br != nil && br.StatusCode != 0 {
+		return nil, types.NewOpenAIError(fmt.Errorf("upstream error (code=%d, msg=%s)", br.StatusCode, br.StatusMsg), types.ErrorCodeBadResponse, http.StatusBadGateway)
+	}
+
 	info.ObserveResponseModel(simpleResponse.Model)
 	for _, choice := range simpleResponse.Choices {
 		if choice.FinishReason == constant.FinishReasonContentFilter {
