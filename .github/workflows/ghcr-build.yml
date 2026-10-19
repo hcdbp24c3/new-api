@@ -3,8 +3,7 @@ name: Publish Docker image (GHCR)
 on:
   push:
     branches:
-      - main
-      - master
+      - feature/multi-key-testing
     tags:
       - '*'
       - '!nightly*'
@@ -61,11 +60,17 @@ jobs:
               exit 1
             fi
           else
-            TAG=${GITHUB_REF#refs/tags/}
+            case "$GITHUB_REF" in
+              refs/tags/*) TAG="${GITHUB_REF#refs/tags/}" ;;
+              *) TAG="${GITHUB_REF#refs/heads/}" ;;
+            esac
           fi
-          echo "version=${TAG}" >> "$GITHUB_OUTPUT"
-          echo "${TAG}" > VERSION
-          echo "Building ${TAG} for ${{ matrix.arch }}"
+          # A Docker tag may only use [A-Za-z0-9_][A-Za-z0-9._-]{0,127}. A branch
+          # name carries '/' and would otherwise produce an invalid reference.
+          TAG_SAFE="$(printf '%s' "$TAG" | tr '/' '_')"
+          echo "version=${TAG_SAFE}" >> "$GITHUB_OUTPUT"
+          echo "${TAG_SAFE}" > VERSION
+          echo "Building ${TAG_SAFE} for ${{ matrix.arch }}"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
@@ -83,6 +88,7 @@ jobs:
         with:
           images: ${{ env.IMAGE }}
           tags: |
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/feature/multi-key-testing' }}
             type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/') }}
             type=ref,event=branch
             type=ref,event=pr
@@ -120,7 +126,6 @@ jobs:
     name: Create multi-arch manifests
     needs: [build_single_arch]
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
 
     permissions:
       packages: write
@@ -145,7 +150,7 @@ jobs:
             "${IMAGE}:${TAG}-arm64"
 
       - name: Create & push latest manifest
-        if: startsWith(github.ref, 'refs/tags/')
+        if: github.ref == 'refs/heads/feature/multi-key-testing' || startsWith(github.ref, 'refs/tags/')
         run: |
           docker buildx imagetools create \
             -t "${IMAGE}:latest" \
