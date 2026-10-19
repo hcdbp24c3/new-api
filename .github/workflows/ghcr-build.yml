@@ -103,9 +103,12 @@ jobs:
           context: .
           platforms: ${{ matrix.platform }}
           push: true
-          tags: |
-            ${{ env.IMAGE }}:${{ steps.version.outputs.version }}-${{ matrix.arch }}
-            ${{ steps.meta.outputs.tags }}
+          # Only the arch-suffixed tag is pushed here. Publishing the shared
+          # tags from this job makes the two matrix runs overwrite each other:
+          # each pushes a single-arch image under the same name, and whichever
+          # finishes last wins, leaving no manifest list behind. The shared tags
+          # are built from both arches in create_manifests instead.
+          tags: ${{ env.IMAGE }}:${{ steps.version.outputs.version }}-${{ matrix.arch }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=${{ matrix.arch }}
           cache-to: type=gha,mode=max,scope=${{ matrix.arch }}
@@ -135,6 +138,9 @@ jobs:
       - name: Set version
         run: echo "TAG=${{ needs.build_single_arch.outputs.version }}" >> "$GITHUB_ENV"
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+
       - name: Log in to GHCR
         uses: docker/login-action@c99871dec2022cc055c062a10cc1a1310835ceb4 # v4.3.0
         with:
@@ -142,25 +148,40 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Create & push version manifest
-        run: |
-          docker buildx imagetools create \
-            -t "${IMAGE}:${TAG}" \
-            "${IMAGE}:${TAG}-amd64" \
-            "${IMAGE}:${TAG}-arm64"
+      - name: Resolve public tags
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/feature/multi-key-testing' }}
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/') }}
+            type=raw,value=${{ needs.build_single_arch.outputs.version }}
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,format=long
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
 
-      - name: Create & push latest manifest
-        if: github.ref == 'refs/heads/feature/multi-key-testing' || startsWith(github.ref, 'refs/tags/')
+      # Every public tag is assembled here from the two arch-specific images.
+      # Building them in the matrix job cannot work: each run would push its own
+      # single-arch image to the same tag and the last run to finish would
+      # replace the other, leaving a tag with no arm64 entry.
+      - name: Create & push multi-arch manifests
         run: |
-          docker buildx imagetools create \
-            -t "${IMAGE}:latest" \
-            "${IMAGE}:${TAG}-amd64" \
-            "${IMAGE}:${TAG}-arm64"
+          set -euo pipefail
+          for TAG_NAME in ${{ steps.meta.outputs.tags }}; do
+            echo "Creating ${TAG_NAME} from ${TAG}-amd64 and ${TAG}-arm64"
+            docker buildx imagetools create \
+              -t "${TAG_NAME}" \
+              "${IMAGE}:${TAG}-amd64" \
+              "${IMAGE}:${TAG}-arm64"
+          done
 
       - name: Manifest summary
         run: |
           {
-            echo "### Multi-arch Manifest"
+            echo "### Multi-arch Manifests"
             echo '```'
             docker buildx imagetools inspect "${IMAGE}:${TAG}"
             echo '```'
