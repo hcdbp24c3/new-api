@@ -170,13 +170,17 @@ jobs:
       - name: Create & push multi-arch manifests
         run: |
           set -euo pipefail
-          for TAG_NAME in ${{ steps.meta.outputs.tags }}; do
+          # The tag list is newline-separated, so it must be read line by line;
+          # word-splitting it into a `for ... in` list runs the second tag into
+          # the shell as a command and fails to parse.
+          while IFS= read -r TAG_NAME; do
+            [ -z "$TAG_NAME" ] && continue
             echo "Creating ${TAG_NAME} from ${TAG}-amd64 and ${TAG}-arm64"
             docker buildx imagetools create \
               -t "${TAG_NAME}" \
               "${IMAGE}:${TAG}-amd64" \
               "${IMAGE}:${TAG}-arm64"
-          done
+          done <<< "${{ steps.meta.outputs.tags }}"
 
       - name: Manifest summary
         run: |
