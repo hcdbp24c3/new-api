@@ -3,6 +3,7 @@ package service
 import (
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -92,6 +93,10 @@ func PreWssConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, usag
 	userQuota, err := model.GetUserQuota(relayInfo.UserId, false)
 	if err != nil {
 		return err
+	}
+	// An unlimited user has no wallet balance to run dry.
+	if unlimited, err := model.IsUserQuotaUnlimited(relayInfo.UserId); err == nil && unlimited {
+		userQuota = math.MaxInt
 	}
 
 	token, err := model.GetTokenByKey(strings.TrimPrefix(relayInfo.TokenKey, "sk-"), false)

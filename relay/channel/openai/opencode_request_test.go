@@ -117,7 +117,8 @@ func TestPrepareOpenCodeFreeTierRequestDoesNotDuplicateTools(t *testing.T) {
 }
 
 func TestOpenCodeGetRequestURLRoutesByUpstreamProtocol(t *testing.T) {
-	base := "https://opencode.ai/zen/v1"
+	// Admins configure the base URL without /v1, like every other channel.
+	base := "https://opencode.ai/zen"
 	cases := []struct {
 		name      string
 		model     string
@@ -129,51 +130,51 @@ func TestOpenCodeGetRequestURLRoutesByUpstreamProtocol(t *testing.T) {
 			name:      "muse-spark uses responses endpoint",
 			model:     "muse-spark-1.2",
 			relayMode: relayconstant.RelayModeChatCompletions,
-			wantURL:   base + "/responses",
+			wantURL:   base + "/v1/responses",
 		},
 		{
 			name:      "gpt uses responses endpoint",
 			model:     "gpt-5",
 			relayMode: relayconstant.RelayModeChatCompletions,
-			wantURL:   base + "/responses",
+			wantURL:   base + "/v1/responses",
 		},
 		{
 			name:      "grok uses responses endpoint",
 			model:     "grok-build-0.1",
 			relayMode: relayconstant.RelayModeChatCompletions,
-			wantURL:   base + "/responses",
+			wantURL:   base + "/v1/responses",
 		},
 		{
 			name:      "claude uses messages endpoint",
 			model:     "claude-sonnet-4.5",
 			relayMode: relayconstant.RelayModeChatCompletions,
-			wantURL:   base + "/messages",
+			wantURL:   base + "/v1/messages",
 		},
 		{
 			name:      "gemini non-stream uses generateContent endpoint",
 			model:     "gemini-3-pro",
 			relayMode: relayconstant.RelayModeChatCompletions,
 			isStream:  false,
-			wantURL:   base + "/models/gemini-3-pro:generateContent",
+			wantURL:   base + "/v1/models/gemini-3-pro:generateContent",
 		},
 		{
 			name:      "gemini stream uses streamGenerateContent endpoint",
 			model:     "gemini-3-pro",
 			relayMode: relayconstant.RelayModeChatCompletions,
 			isStream:  true,
-			wantURL:   base + "/models/gemini-3-pro:streamGenerateContent?alt=sse",
+			wantURL:   base + "/v1/models/gemini-3-pro:streamGenerateContent?alt=sse",
 		},
 		{
 			name:      "mimo keeps chat completions endpoint",
 			model:     "mimo-v2.5-free",
 			relayMode: relayconstant.RelayModeChatCompletions,
-			wantURL:   base + "/chat/completions",
+			wantURL:   base + "/v1/chat/completions",
 		},
 		{
 			name:      "non chat relay mode keeps legacy chat completions endpoint",
 			model:     "muse-spark-1.2",
 			relayMode: relayconstant.RelayModeUnknown,
-			wantURL:   base + "/chat/completions",
+			wantURL:   base + "/v1/chat/completions",
 		},
 	}
 	for _, tc := range cases {
@@ -185,6 +186,29 @@ func TestOpenCodeGetRequestURLRoutesByUpstreamProtocol(t *testing.T) {
 			got, err := (&Adaptor{}).GetRequestURL(info)
 			require.NoError(t, err)
 			assert.Equal(t, tc.wantURL, got)
+		})
+	}
+}
+
+// Channels configured before the base URL stopped needing /v1 must keep
+// resolving to the same endpoint instead of picking up a doubled segment.
+func TestOpenCodeGetRequestURLAcceptsBaseURLWithOrWithoutV1(t *testing.T) {
+	want := "https://opencode.ai/zen/v1/responses"
+	for _, base := range []string{
+		"https://opencode.ai/zen",
+		"https://opencode.ai/zen/",
+		"https://opencode.ai/zen/v1",
+		"https://opencode.ai/zen/v1/",
+	} {
+		t.Run(base, func(t *testing.T) {
+			info := openCodeRelayInfo(false)
+			info.RelayMode = relayconstant.RelayModeChatCompletions
+			info.ChannelBaseUrl = base
+			info.UpstreamModelName = "muse-spark-1.2"
+
+			got, err := (&Adaptor{}).GetRequestURL(info)
+			require.NoError(t, err)
+			assert.Equal(t, want, got)
 		})
 	}
 }

@@ -41,6 +41,17 @@ func openCodeUpstreamProtocol(info *relaycommon.RelayInfo) string {
 	}
 }
 
+// openCodeAPIBase returns the OpenCode base URL with its /v1 segment removed,
+// so the endpoint path can append /v1 exactly once. Every other channel takes
+// its /v1 from RequestURLPath, which is why admins are told to leave it off the
+// base URL; OpenCode builds its endpoint path itself, so it normalises here
+// instead of asking admins for a different base URL than every other channel.
+// A base URL that still carries /v1 from an older configuration is trimmed, so
+// switching does not break a channel that is already set up.
+func openCodeAPIBase(baseURL string) string {
+	return strings.TrimSuffix(strings.TrimRight(baseURL, "/"), "/v1")
+}
+
 func prepareOpenCodeFreeTierRequest(info *relaycommon.RelayInfo, request *dto.GeneralOpenAIRequest) {
 	if info == nil || request == nil || info.ChannelMeta == nil {
 		return

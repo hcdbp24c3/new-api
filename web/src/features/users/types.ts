@@ -44,6 +44,7 @@ export const userSchema = z.object({
   email: z.string().optional(),
   quota: z.number(),
   used_quota: z.number(),
+  unlimited_quota: z.boolean().optional(),
   request_count: z.number(),
   group: z.string(),
   aff_code: z.string().optional(),
@@ -125,6 +126,7 @@ export interface UserFormData {
   quota?: number // Only used when updating user
   group?: string // Only used when updating user
   remark?: string // Only used when updating user
+  unlimited_quota?: boolean // Exempt the user from wallet balance checks
   admin_permissions?: AdminPermissionMatrix
 }
 

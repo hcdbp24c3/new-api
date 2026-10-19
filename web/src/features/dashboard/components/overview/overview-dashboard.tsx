@@ -460,6 +460,30 @@ function CompactQuickAction(props: { action: QuickAction }) {
   )
 }
 
+function QuickActionsCard(props: { actions: QuickAction[]; columns: 1 | 2 }) {
+  const { t } = useTranslation()
+
+  return (
+    <CardStaggerItem className='bg-card h-full rounded-2xl border p-4 shadow-xs sm:p-5'>
+      <div className='flex h-full flex-col gap-4'>
+        <div className='flex flex-col gap-1'>
+          <div className='text-muted-foreground text-xs font-medium tracking-wider uppercase'>
+            {t('Recommended actions')}
+          </div>
+          <h3 className='text-lg font-semibold tracking-tight'>
+            {t('Keep the platform ready')}
+          </h3>
+        </div>
+        <div className={cn('grid gap-2', props.columns === 2 && 'sm:grid-cols-2')}>
+          {props.actions.map((action) => (
+            <QuickActionItem key={action.title} action={action} />
+          ))}
+        </div>
+      </div>
+    </CardStaggerItem>
+  )
+}
+
 export function OverviewDashboard() {
   const { t } = useTranslation()
   const setupGuideId = useId()
@@ -711,23 +735,7 @@ export function OverviewDashboard() {
                   </div>
                 </CardStaggerItem>
 
-                <CardStaggerItem className='bg-card h-full rounded-2xl border p-4 shadow-xs sm:p-5'>
-                  <div className='flex h-full flex-col gap-4'>
-                    <div className='flex flex-col gap-1'>
-                      <div className='text-muted-foreground text-xs font-medium tracking-wider uppercase'>
-                        {t('Recommended actions')}
-                      </div>
-                      <h3 className='text-lg font-semibold tracking-tight'>
-                        {t('Keep the platform ready')}
-                      </h3>
-                    </div>
-                    <div className='grid gap-2'>
-                      {visibleQuickActions.map((action) => (
-                        <QuickActionItem key={action.title} action={action} />
-                      ))}
-                    </div>
-                  </div>
-                </CardStaggerItem>
+                <QuickActionsCard actions={visibleQuickActions} columns={1} />
               </CardStaggerContainer>
             )}
           </div>
@@ -788,6 +796,12 @@ export function OverviewDashboard() {
           )}
 
           <SummaryCards />
+
+          {!setupGuideExpanded && (
+            <CardStaggerContainer>
+              <QuickActionsCard actions={visibleQuickActions} columns={2} />
+            </CardStaggerContainer>
+          )}
 
           {showContentPanels && (
             <CardStaggerContainer

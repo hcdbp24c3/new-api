@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -139,4 +140,114 @@ func TestModelDevSyncHandler(t *testing.T) {
 	assert.True(t, h.Enabled())
 	assert.Equal(t, 24*time.Hour, h.Interval())
 	assert.Nil(t, h.NewPayload())
+}
+
+// A provider's own API describes the model this gateway actually serves, so it
+// wins over the models.dev catalog, which describes one model across every
+// provider offering it. models.dev still fills whatever the provider omits.
+func TestResolveModelCapabilityPrefersProviderOverCatalog(t *testing.T) {
+	catalog := modelDevModel{
+		Reasoning: true,
+		ToolCall:  false,
+		Limit:     modelDevLimit{Context: 128000, Output: 16384},
+	}
+
+	t.Run("provider wins for every field it reports", func(t *testing.T) {
+		capability := resolveModelCapability(upstreamModelMetadata{
+			ContextLength:   1048576,
+			MaxOutputTokens: 65536,
+			ToolCall:        lo.ToPtr(true),
+		}, catalog)
+
+		assert.Equal(t, 1048576, capability.ContextLength)
+		assert.Equal(t, 65536, capability.MaxOutputTokens)
+		assert.True(t, capability.ToolCall)
+		// The provider reported no reasoning flag, so the catalog decides.
+		assert.True(t, capability.Reasoning)
+	})
+
+	t.Run("catalog fills fields the provider omits", func(t *testing.T) {
+		capability := resolveModelCapability(upstreamModelMetadata{}, catalog)
+
+		assert.Equal(t, 128000, capability.ContextLength)
+		assert.Equal(t, 16384, capability.MaxOutputTokens)
+		assert.False(t, capability.ToolCall)
+		assert.True(t, capability.ToolCallKnown)
+	})
+
+	t.Run("provider reporting false overrides catalog true", func(t *testing.T) {
+		capability := resolveModelCapability(upstreamModelMetadata{ToolCall: lo.ToPtr(false)}, modelDevModel{ToolCall: true})
+
+		assert.False(t, capability.ToolCall)
+	})
+}
+
+// Most OpenAI-compatible providers return only id/created/owned_by. Those
+// entries must contribute nothing so the model keeps resolving via models.dev
+// instead of being zeroed out.
+func TestOpenAIChannelModelMetadataIgnoresMetadataFreeEntries(t *testing.T) {
+	items := []OpenAIModel{
+		{ID: "plain-model", Object: "model", Created: 1, OwnedBy: "acme"},
+		{ID: "rich-model", Metadata: map[string]any{
+			"context_length":    float64(200000),
+			"max_output_tokens": float64(32000),
+			"description":       "  Fast model  ",
+			"tool_call":         true,
+		}},
+	}
+
+	metadata := openAIChannelModelMetadata(items)
+
+	assert.NotContains(t, metadata, "plain-model")
+	require.Contains(t, metadata, "rich-model")
+	assert.Equal(t, 200000, metadata["rich-model"].ContextLength)
+	assert.Equal(t, 32000, metadata["rich-model"].MaxOutputTokens)
+	assert.Equal(t, "Fast model", metadata["rich-model"].Description)
+	require.NotNil(t, metadata["rich-model"].ToolCall)
+	assert.True(t, *metadata["rich-model"].ToolCall)
+}
+
+// A provider limit of zero means "not reported", never "this model has no
+// context window", so it must not become a synced value.
+func TestOpenAIChannelModelMetadataRejectsNonPositiveLimits(t *testing.T) {
+	metadata := openAIChannelModelMetadata([]OpenAIModel{
+		{ID: "zeroed", Metadata: map[string]any{"context_length": float64(0)}},
+		{ID: "negative", Metadata: map[string]any{"context_length": float64(-1)}},
+		{ID: "stringed", Metadata: map[string]any{"max_output_tokens": "8192"}},
+	})
+
+	assert.NotContains(t, metadata, "zeroed")
+	assert.NotContains(t, metadata, "negative")
+	assert.Equal(t, 8192, metadata["stringed"].MaxOutputTokens)
+}
+
+// The first channel that reports a field for a model wins, so two providers
+// offering the same model cannot fight over it during one sync.
+func TestMergeUpstreamModelMetadataFirstWriterWins(t *testing.T) {
+	merged := map[string]upstreamModelMetadata{}
+
+	mergeUpstreamModelMetadata(merged, map[string]upstreamModelMetadata{
+		"gpt-4o": {ContextLength: 128000},
+	}, "")
+	mergeUpstreamModelMetadata(merged, map[string]upstreamModelMetadata{
+		"gpt-4o": {ContextLength: 999999},
+		"o3":     {ContextLength: 200000},
+	}, "")
+
+	assert.Equal(t, 128000, merged["gpt-4o"].ContextLength)
+	assert.Equal(t, 200000, merged["o3"].ContextLength)
+}
+
+// A channel with model_prefix stores models as "prefix/name" in the database
+// while the provider reports the bare name, so the merged key must carry the
+// prefix back.
+func TestMergeUpstreamModelMetadataAppliesChannelPrefix(t *testing.T) {
+	merged := map[string]upstreamModelMetadata{}
+
+	mergeUpstreamModelMetadata(merged, map[string]upstreamModelMetadata{
+		"deepseek-chat": {ContextLength: 128000},
+	}, "deepseek")
+
+	require.Contains(t, merged, "deepseek/deepseek-chat")
+	assert.Equal(t, 128000, merged["deepseek/deepseek-chat"].ContextLength)
 }

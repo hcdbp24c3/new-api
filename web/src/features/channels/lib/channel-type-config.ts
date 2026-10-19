@@ -286,7 +286,7 @@ export const CHANNEL_TYPE_CONFIGS: Record<number, ChannelTypeConfig> = {
     name: CHANNEL_TYPES[69],
     icon: 'OpenCode',
     hints: {
-      baseUrl: 'https://opencode.ai/zen/v1',
+      baseUrl: 'https://opencode.ai/zen',
       key: 'OpenCode API key (sk-...)',
       models: 'gpt-5.6-luna, grok-4.6, deepseek-v4-pro, claude-opus-5',
     },

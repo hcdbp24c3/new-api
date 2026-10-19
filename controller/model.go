@@ -284,8 +284,8 @@ func ListModels(c *gin.Context, modelType int) {
 				if caps, ok := capabilities[m.Id]; ok {
 					userOpenAiModels[i].ContextLength = caps.ContextLength
 					userOpenAiModels[i].MaxOutputTokens = caps.MaxOutputTokens
-					userOpenAiModels[i].Reasoning = caps.Reasoning
-					userOpenAiModels[i].ToolCall = caps.ToolCall
+					userOpenAiModels[i].Reasoning = lo.ToPtr(caps.Reasoning)
+					userOpenAiModels[i].ToolCall = lo.ToPtr(caps.ToolCall)
 				}
 			}
 		}
@@ -350,8 +350,8 @@ func ChannelListModels(c *gin.Context) {
 		if caps, ok := capabilities[m.Id]; ok {
 			enriched[i].ContextLength = caps.ContextLength
 			enriched[i].MaxOutputTokens = caps.MaxOutputTokens
-			enriched[i].Reasoning = caps.Reasoning
-			enriched[i].ToolCall = caps.ToolCall
+			enriched[i].Reasoning = lo.ToPtr(caps.Reasoning)
+			enriched[i].ToolCall = lo.ToPtr(caps.ToolCall)
 		}
 	}
 	c.JSON(200, gin.H{
@@ -391,8 +391,8 @@ func RetrieveModel(c *gin.Context, modelType int) {
 			if caps, ok := capabilities[modelId]; ok {
 				aiModel.ContextLength = caps.ContextLength
 				aiModel.MaxOutputTokens = caps.MaxOutputTokens
-				aiModel.Reasoning = caps.Reasoning
-				aiModel.ToolCall = caps.ToolCall
+				aiModel.Reasoning = lo.ToPtr(caps.Reasoning)
+				aiModel.ToolCall = lo.ToPtr(caps.ToolCall)
 			}
 		}
 		switch modelType {

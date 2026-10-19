@@ -45,6 +45,7 @@ import {
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
 import {
   Select,
   SelectContent,
@@ -473,6 +474,31 @@ export function UsersMutateDrawer({
                           {formatQuota(parseQuotaFromDollars(field.value || 0))}
                         </FormDescription>
                         <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name='unlimited_quota'
+                    render={({ field }) => (
+                      <FormItem className='flex flex-row items-center justify-between rounded-lg border p-3'>
+                        <div className='flex flex-col gap-0.5'>
+                          <FormLabel className='text-sm'>
+                            {t('Unlimited Balance')}
+                          </FormLabel>
+                          <FormDescription className='text-xs'>
+                            {t(
+                              'Exempt this user from balance checks. Spending is still recorded, but the balance is never charged.'
+                            )}
+                          </FormDescription>
+                        </div>
+                        <FormControl>
+                          <Switch
+                            checked={field.value ?? false}
+                            onCheckedChange={field.onChange}
+                          />
+                        </FormControl>
                       </FormItem>
                     )}
                   />

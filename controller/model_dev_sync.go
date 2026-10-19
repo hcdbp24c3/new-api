@@ -233,6 +233,84 @@ func matchProviderToVendor(provider, vendor string) bool {
 	return strings.EqualFold(provider, vendor)
 }
 
+// loadChannelModelMetadata asks each channel that serves a synced model for its
+// own metadata, so capability fields resolve from the provider that actually
+// serves the model instead of a third-party catalog. Channels are visited once
+// each and their results are cached for the whole sync; a provider that errors
+// is skipped so its models fall back to models.dev.
+func loadChannelModelMetadata(models []map[string]*model.Model) map[string]upstreamModelMetadata {
+	merged := make(map[string]upstreamModelMetadata)
+
+	var channels []model.Channel
+	if err := model.DB.Find(&channels).Error; err != nil {
+		logger.LogWarn(context.Background(), "model metadata sync: read channels failed: "+err.Error())
+		return merged
+	}
+
+	// A model name reaches a provider either bare or behind that channel's
+	// model_prefix, so index both spellings before matching.
+	wanted := make(map[string]struct{})
+	for _, byName := range models {
+		for name := range byName {
+			wanted[name] = struct{}{}
+		}
+	}
+
+	visited := make(map[string]struct{}, len(channels))
+	for _, channel := range channels {
+		if _, done := visited[fmt.Sprintf("%d", channel.Id)]; done {
+			continue
+		}
+		visited[fmt.Sprintf("%d", channel.Id)] = struct{}{}
+		if !channelServesAnyModel(&channel, wanted) {
+			continue
+		}
+
+		metadata, err := fetchChannelUpstreamModelMetadata(&channel)
+		if err != nil {
+			logger.LogWarn(context.Background(), fmt.Sprintf(
+				"model metadata sync: channel %d metadata unavailable, falling back to models.dev: %s",
+				channel.Id, err.Error()))
+			continue
+		}
+		mergeUpstreamModelMetadata(merged, metadata, model.ExtractModelPrefix(channel.OtherSettings))
+	}
+	return merged
+}
+
+// channelServesAnyModel reports whether the channel lists any model the sync is
+// about to touch, so a deployment does not query every provider on every run.
+func channelServesAnyModel(channel *model.Channel, wanted map[string]struct{}) bool {
+	prefix := model.ExtractModelPrefix(channel.OtherSettings)
+	for _, name := range channel.GetModels() {
+		if _, exists := wanted[name]; exists {
+			return true
+		}
+		if prefix != "" {
+			if _, exists := wanted[prefix+"/"+name]; exists {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// mergeUpstreamModelMetadata folds one channel's result into the shared map.
+// The first channel that reports a field for a model wins, so two providers
+// offering the same model cannot fight over it during one sync.
+func mergeUpstreamModelMetadata(merged, metadata map[string]upstreamModelMetadata, prefix string) {
+	for name, entry := range metadata {
+		key := name
+		if prefix != "" {
+			key = prefix + "/" + name
+		}
+		if _, exists := merged[key]; exists {
+			continue
+		}
+		merged[key] = entry
+	}
+}
+
 // SyncModelsDevPreview returns candidates with diffs from models.dev catalog.
 func SyncModelsDevPreview(c *gin.Context) {
 	catalog, version, err := fetchModelDevCatalog(c)
@@ -291,6 +369,7 @@ func SyncModelsDevPreview(c *gin.Context) {
 	}
 
 	candidates := make([]modelsDevSyncCandidate, 0)
+	upstreamMetadata := loadChannelModelMetadata([]map[string]*model.Model{modelByName})
 	for providerKey, provider := range catalog.Providers {
 		vendorFound := false
 		if _, ok := vendorByName[strings.ToLower(provider.Name)]; ok {
@@ -316,7 +395,7 @@ func SyncModelsDevPreview(c *gin.Context) {
 				continue
 			}
 
-			fields := buildModelDevCapabilityFields(local, devModel)
+			fields := buildModelDevCapabilityFields(local, devModel, upstreamMetadata[local.ModelName])
 			if len(fields) > 0 {
 				candidate.Kind = "update"
 				candidate.Fields = fields
@@ -339,21 +418,61 @@ func SyncModelsDevPreview(c *gin.Context) {
 	})
 }
 
-// buildModelDevCapabilityFields returns field diffs between a local model and a models.dev model.
-func buildModelDevCapabilityFields(local *model.Model, dev modelDevModel) []modelsDevSyncField {
-	var fields []modelsDevSyncField
+// modelCapabilitySource is the merged view of one model's capabilities: the
+// provider's own API first, then the models.dev catalog for whatever the
+// provider did not report. The provider is authoritative because it describes
+// the model this gateway actually serves; models.dev is a third-party catalog
+// that covers a model across every provider offering it.
+type modelCapabilitySource struct {
+	ContextLength   int
+	MaxOutputTokens int
+	Reasoning       bool
+	ToolCall        bool
+	ToolCallKnown   bool
+}
 
-	if dev.Limit.Context > 0 && local.ContextLength != dev.Limit.Context {
-		fields = append(fields, modelsDevSyncField{Field: "context_length", Local: local.ContextLength, Upstream: dev.Limit.Context})
+// resolveModelCapability prefers the provider's metadata and falls back to
+// models.dev per field. A provider that reports nothing usable, which is the
+// common case for OpenAI-compatible channels, leaves the whole capability set
+// to models.dev.
+func resolveModelCapability(provider upstreamModelMetadata, dev modelDevModel) modelCapabilitySource {
+	source := modelCapabilitySource{
+		ContextLength:   dev.Limit.Context,
+		MaxOutputTokens: dev.Limit.Output,
+		Reasoning:       dev.Reasoning,
+		ToolCall:        dev.ToolCall,
+		ToolCallKnown:   true,
 	}
-	if dev.Limit.Output > 0 && local.MaxOutputTokens != dev.Limit.Output {
-		fields = append(fields, modelsDevSyncField{Field: "max_output_tokens", Local: local.MaxOutputTokens, Upstream: dev.Limit.Output})
+
+	if provider.ContextLength > 0 {
+		source.ContextLength = provider.ContextLength
 	}
-	if local.Reasoning != dev.Reasoning {
-		fields = append(fields, modelsDevSyncField{Field: "reasoning", Local: local.Reasoning, Upstream: dev.Reasoning})
+	if provider.MaxOutputTokens > 0 {
+		source.MaxOutputTokens = provider.MaxOutputTokens
 	}
-	if local.ToolCall != dev.ToolCall {
-		fields = append(fields, modelsDevSyncField{Field: "tool_call", Local: local.ToolCall, Upstream: dev.ToolCall})
+	if provider.ToolCall != nil {
+		source.ToolCall = *provider.ToolCall
+	}
+	return source
+}
+
+// buildModelDevCapabilityFields returns field diffs between a local model and
+// the merged provider/catalog capabilities.
+func buildModelDevCapabilityFields(local *model.Model, dev modelDevModel, provider upstreamModelMetadata) []modelsDevSyncField {
+	var fields []modelsDevSyncField
+	capability := resolveModelCapability(provider, dev)
+
+	if capability.ContextLength > 0 && local.ContextLength != capability.ContextLength {
+		fields = append(fields, modelsDevSyncField{Field: "context_length", Local: local.ContextLength, Upstream: capability.ContextLength})
+	}
+	if capability.MaxOutputTokens > 0 && local.MaxOutputTokens != capability.MaxOutputTokens {
+		fields = append(fields, modelsDevSyncField{Field: "max_output_tokens", Local: local.MaxOutputTokens, Upstream: capability.MaxOutputTokens})
+	}
+	if local.Reasoning != capability.Reasoning {
+		fields = append(fields, modelsDevSyncField{Field: "reasoning", Local: local.Reasoning, Upstream: capability.Reasoning})
+	}
+	if capability.ToolCallKnown && local.ToolCall != capability.ToolCall {
+		fields = append(fields, modelsDevSyncField{Field: "tool_call", Local: local.ToolCall, Upstream: capability.ToolCall})
 	}
 	if dev.Cost.Input > 0 && local.PricingInput != dev.Cost.Input {
 		fields = append(fields, modelsDevSyncField{Field: "pricing_input", Local: local.PricingInput, Upstream: dev.Cost.Input})
@@ -421,6 +540,7 @@ func SyncModelsDevApply(c *gin.Context) {
 	}
 
 	updatedCount := 0
+	upstreamMetadata := loadChannelModelMetadata([]map[string]*model.Model{modelByName})
 	for _, selection := range request.Selections {
 		provider, providerExists := catalog.Providers[selection.Provider]
 		if !providerExists {
@@ -449,18 +569,19 @@ func SyncModelsDevApply(c *gin.Context) {
 			continue
 		}
 
+		capability := resolveModelCapability(upstreamMetadata[local.ModelName], devModel)
 		updates := map[string]any{}
-		if devModel.Limit.Context > 0 && local.ContextLength != devModel.Limit.Context {
-			updates["context_length"] = devModel.Limit.Context
+		if capability.ContextLength > 0 && local.ContextLength != capability.ContextLength {
+			updates["context_length"] = capability.ContextLength
 		}
-		if devModel.Limit.Output > 0 && local.MaxOutputTokens != devModel.Limit.Output {
-			updates["max_output_tokens"] = devModel.Limit.Output
+		if capability.MaxOutputTokens > 0 && local.MaxOutputTokens != capability.MaxOutputTokens {
+			updates["max_output_tokens"] = capability.MaxOutputTokens
 		}
-		if local.Reasoning != devModel.Reasoning {
-			updates["reasoning"] = devModel.Reasoning
+		if local.Reasoning != capability.Reasoning {
+			updates["reasoning"] = capability.Reasoning
 		}
-		if local.ToolCall != devModel.ToolCall {
-			updates["tool_call"] = devModel.ToolCall
+		if capability.ToolCallKnown && local.ToolCall != capability.ToolCall {
+			updates["tool_call"] = capability.ToolCall
 		}
 		if devModel.Cost.Input > 0 && local.PricingInput != devModel.Cost.Input {
 			updates["pricing_input"] = devModel.Cost.Input
@@ -537,6 +658,7 @@ func (h modelDevSyncHandler) Run(ctx context.Context, task *model.SystemTask, ru
 	}
 
 	updatedCount := 0
+	upstreamMetadata := loadChannelModelMetadata([]map[string]*model.Model{modelByName})
 	for _, provider := range catalog.Providers {
 		if _, vendorExists := vendorByName[strings.ToLower(provider.Name)]; !vendorExists {
 			continue
@@ -547,18 +669,19 @@ func (h modelDevSyncHandler) Run(ctx context.Context, task *model.SystemTask, ru
 				continue
 			}
 
+			capability := resolveModelCapability(upstreamMetadata[local.ModelName], devModel)
 			updates := map[string]any{}
-			if devModel.Limit.Context > 0 && local.ContextLength != devModel.Limit.Context {
-				updates["context_length"] = devModel.Limit.Context
+			if capability.ContextLength > 0 && local.ContextLength != capability.ContextLength {
+				updates["context_length"] = capability.ContextLength
 			}
-			if devModel.Limit.Output > 0 && local.MaxOutputTokens != devModel.Limit.Output {
-				updates["max_output_tokens"] = devModel.Limit.Output
+			if capability.MaxOutputTokens > 0 && local.MaxOutputTokens != capability.MaxOutputTokens {
+				updates["max_output_tokens"] = capability.MaxOutputTokens
 			}
-			if local.Reasoning != devModel.Reasoning {
-				updates["reasoning"] = devModel.Reasoning
+			if local.Reasoning != capability.Reasoning {
+				updates["reasoning"] = capability.Reasoning
 			}
-			if local.ToolCall != devModel.ToolCall {
-				updates["tool_call"] = devModel.ToolCall
+			if capability.ToolCallKnown && local.ToolCall != capability.ToolCall {
+				updates["tool_call"] = capability.ToolCall
 			}
 			if devModel.Cost.Input > 0 && local.PricingInput != devModel.Cost.Input {
 				updates["pricing_input"] = devModel.Cost.Input

@@ -643,8 +643,8 @@ export const CHANNEL_BASE_URL_OPTIONS: Record<number, BaseURLOption[]> = {
   ],
   69: [
     // OpenCode
-    { value: 'https://opencode.ai/zen/v1', label: 'Zen PAYG' },
-    { value: 'https://opencode.ai/zen/go/v1', label: 'Go Sub' },
+    { value: 'https://opencode.ai/zen', label: 'Zen PAYG' },
+    { value: 'https://opencode.ai/zen/go', label: 'Go Sub' },
   ],
   70: [
     // VolcEngine API

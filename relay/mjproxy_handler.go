@@ -221,9 +221,12 @@ func RelaySwapFace(c *gin.Context, info *relaycommon.RelayInfo) *dto.MidjourneyR
 	}
 
 	if userQuota-priceData.Quota < 0 {
-		return &dto.MidjourneyResponse{
-			Code:        4,
-			Description: "quota_not_enough",
+		unlimited, _ := model.IsUserQuotaUnlimited(info.UserId)
+		if !unlimited {
+			return &dto.MidjourneyResponse{
+				Code:        4,
+				Description: "quota_not_enough",
+			}
 		}
 	}
 	requestURL := getMjRequestPath(c.Request.URL.String())
@@ -544,9 +547,12 @@ func RelayMidjourneySubmit(c *gin.Context, relayInfo *relaycommon.RelayInfo) *dt
 	}
 
 	if consumeQuota && userQuota-priceData.Quota < 0 {
-		return &dto.MidjourneyResponse{
-			Code:        4,
-			Description: "quota_not_enough",
+		unlimited, _ := model.IsUserQuotaUnlimited(relayInfo.UserId)
+		if !unlimited {
+			return &dto.MidjourneyResponse{
+				Code:        4,
+				Description: "quota_not_enough",
+			}
 		}
 	}
 

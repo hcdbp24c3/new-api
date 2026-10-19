@@ -598,12 +598,31 @@ type GeminiModelsResponse struct {
 }
 
 func FetchGeminiModels(baseURL, apiKey string, setting dto.ChannelSettings) ([]string, error) {
+	models, err := FetchGeminiModelMetadata(baseURL, apiKey, setting)
+	if err != nil {
+		return nil, err
+	}
+	allModels := make([]string, 0, len(models))
+	for _, item := range models {
+		modelNameValue, ok := item.Name.(string)
+		if !ok {
+			continue
+		}
+		allModels = append(allModels, strings.TrimPrefix(modelNameValue, "models/"))
+	}
+	return allModels, nil
+}
+
+// FetchGeminiModelMetadata returns Gemini's full model list. Gemini reports
+// token limits and a description next to each model name, which model discovery
+// drops but metadata sync consumes.
+func FetchGeminiModelMetadata(baseURL, apiKey string, setting dto.ChannelSettings) ([]dto.GeminiModel, error) {
 	client, err := service.GetHttpClientWithProxySettings(setting.Proxy, setting)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create HTTP client: %v", err)
 	}
 
-	allModels := make([]string, 0)
+	allModels := make([]dto.GeminiModel, 0)
 	nextPageToken := ""
 	maxPages := 100 // Safety limit to prevent infinite loops
 
@@ -648,12 +667,7 @@ func FetchGeminiModels(baseURL, apiKey string, setting dto.ChannelSettings) ([]s
 		}
 
 		for _, model := range modelsResponse.Models {
-			modelNameValue, ok := model.Name.(string)
-			if !ok {
-				continue
-			}
-			modelName := strings.TrimPrefix(modelNameValue, "models/")
-			allModels = append(allModels, modelName)
+			allModels = append(allModels, model)
 		}
 
 		nextPageToken = modelsResponse.NextPageToken

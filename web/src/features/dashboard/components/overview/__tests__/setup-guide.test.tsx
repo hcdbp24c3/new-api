@@ -107,24 +107,78 @@ async function renderOverview() {
 }
 
 describe('overview setup guide', () => {
-  it('shows usage first and only a header entry when setup is complete', async () => {
+  it('shows usage first and keeps the recommended actions when setup is complete', async () => {
     await renderOverview()
 
     const toggle = await screen.findByRole('button', { name: 'Setup guide' })
     expect(toggle).toHaveAttribute('aria-expanded', 'false')
     expect(
       screen.getAllByRole('heading').map((heading) => heading.textContent)
-    ).toEqual(['Overview', 'Usage at a glance'])
+    ).toEqual(['Overview', 'Usage at a glance', 'Keep the platform ready'])
     expect(screen.queryByText('Setup guide complete')).not.toBeInTheDocument()
     expect(screen.queryByText('Setup progress: 3/3')).not.toBeInTheDocument()
-    for (const name of ['API Keys', 'Channels', 'Usage Logs', 'Pricing']) {
-      expect(screen.queryByRole('button', { name })).not.toBeInTheDocument()
+    // Collapsing the guide hides only the guide; the quick actions stay reachable.
+    for (const [name, href] of [
+      ['API Keys', '/keys'],
+      ['Usage Logs', '/usage-logs'],
+      ['Pricing', '/pricing'],
+    ]) {
+      const action = screen.getByRole('button', { name: new RegExp(`^${name}`) })
+      expect(action).toBeVisible()
+      expect(action).toHaveAttribute('href', href)
     }
+    // Channels stays hidden for a non-admin rather than appearing collapsed.
+    expect(
+      screen.queryByRole('button', { name: /^Channels/ })
+    ).not.toBeInTheDocument()
     const panel = document.getElementById(
       toggle.getAttribute('aria-controls') ?? ''
     )
     expect(panel).toBeInTheDocument()
     expect(panel).not.toBeVisible()
+  })
+
+  it('keeps the admin-only quick action visible to an admin after the guide is hidden', async () => {
+    const user = userEvent.setup()
+    useAuthStore.getState().auth.setUser({
+      id: 1,
+      username: 'admin-user',
+      role: 10,
+    })
+    await renderOverview()
+
+    await user.click(
+      await screen.findByRole('button', { name: 'Hide setup guide' })
+    )
+
+    const channels = await screen.findByText('Keep the platform ready')
+    expect(channels).toBeVisible()
+    // The collapsed strip chip and the full card both link to the same place.
+    for (const action of screen.getAllByRole('button', { name: /^Channels/ })) {
+      expect(action).toBeVisible()
+      expect(action).toHaveAttribute('href', '/channels')
+    }
+  })
+
+  it('keeps the full recommended action cards visible while an incomplete guide stays collapsed', async () => {
+    const user = userEvent.setup()
+    useAuthStore
+      .getState()
+      .auth.setUser({ id: 1, username: 'new-user', role: 1 })
+    await renderOverview()
+
+    await user.click(
+      await screen.findByRole('button', { name: 'Hide setup guide' })
+    )
+
+    expect(await screen.findByText('Keep the platform ready')).toBeVisible()
+    // The compact strip keeps its chips; the full cards stay on the page too.
+    expect(
+      screen.getByRole('button', { name: /^Usage LogsInspect/ })
+    ).toBeVisible()
+    expect(
+      screen.getByRole('button', { name: /^PricingReview/ })
+    ).toBeVisible()
   })
 
   it('toggles the completed guide with the keyboard and restores focus after hiding it', async () => {

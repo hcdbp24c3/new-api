@@ -11,8 +11,11 @@ type OpenAIModels struct {
 	SupportedEndpointTypes []types.EndpointType `json:"supported_endpoint_types"`
 	ContextLength          int                  `json:"context_length,omitempty"`
 	MaxOutputTokens        int                  `json:"max_output_tokens,omitempty"`
-	Reasoning              bool                 `json:"reasoning,omitempty"`
-	ToolCall               bool                 `json:"tool_call,omitempty"`
+	// Pointers so a known-false capability is still serialized. A plain bool
+	// with omitempty drops every false value, leaving clients unable to tell
+	// "does not reason" apart from "capability not synced yet".
+	Reasoning *bool `json:"reasoning,omitempty"`
+	ToolCall  *bool `json:"tool_call,omitempty"`
 }
 
 type AnthropicModel struct {

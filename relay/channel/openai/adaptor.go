@@ -187,24 +187,25 @@ func (a *Adaptor) GetRequestURL(info *relaycommon.RelayInfo) (string, error) {
 		url = strings.Replace(url, "{model}", info.UpstreamModelName, -1)
 		return url, nil
 	case constant.ChannelTypeOpenCode:
-		// OpenCode base URLs already include /v1 (e.g. https://opencode.ai/zen/v1
-		// or https://opencode.ai/zen/go/v1). Append the endpoint path directly to
-		// avoid the double-/v1 caused by RequestURLPath being /v1/chat/completions.
-		// The endpoint family follows the official Zen docs table, not the claude/
-		// gemini adaptors: those would emit /v1/messages and /{version}/models.
+		// RequestURLPath is /v1/chat/completions, so appending it would double
+		// the /v1. Build the Zen endpoint path directly against the normalized
+		// base instead. The endpoint family follows the official Zen docs table,
+		// not the claude/gemini adaptors: those would emit /v1/messages and
+		// /{version}/models.
+		base := openCodeAPIBase(info.ChannelBaseUrl)
 		switch openCodeUpstreamProtocol(info) {
 		case openCodeProtocolResponses:
-			return fmt.Sprintf("%s/responses", info.ChannelBaseUrl), nil
+			return fmt.Sprintf("%s/v1/responses", base), nil
 		case openCodeProtocolClaude:
-			return fmt.Sprintf("%s/messages", info.ChannelBaseUrl), nil
+			return fmt.Sprintf("%s/v1/messages", base), nil
 		case openCodeProtocolGemini:
 			action := "generateContent"
 			if info.IsStream {
 				action = "streamGenerateContent?alt=sse"
 			}
-			return fmt.Sprintf("%s/models/%s:%s", info.ChannelBaseUrl, info.UpstreamModelName, action), nil
+			return fmt.Sprintf("%s/v1/models/%s:%s", base, info.UpstreamModelName, action), nil
 		default:
-			return fmt.Sprintf("%s/chat/completions", info.ChannelBaseUrl), nil
+			return fmt.Sprintf("%s/v1/chat/completions", base), nil
 		}
 	default:
 		if (info.RelayFormat == types.RelayFormatClaude || info.RelayFormat == types.RelayFormatGemini) &&

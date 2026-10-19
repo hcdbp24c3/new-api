@@ -391,6 +391,20 @@ func NewBillingSession(c *gin.Context, relayInfo *relaycommon.RelayInfo, preCons
 		if err != nil {
 			return nil, types.NewError(err, types.ErrorCodeQueryDataError, types.ErrOptionWithSkipRetry())
 		}
+		// An unlimited user skips the balance gate; TryReserveUserQuota and
+		// DecreaseUserQuota leave the wallet untouched for them.
+		if unlimited, err := model.IsUserQuotaUnlimited(relayInfo.UserId); err == nil && unlimited {
+			relayInfo.UserQuota = userQuota
+			session := &BillingSession{
+				relayInfo: relayInfo,
+				funding:   &WalletFunding{userId: relayInfo.UserId},
+				lang:      i18n.StatedLang(c),
+			}
+			if apiErr := session.preConsume(c, preConsumedQuota); apiErr != nil {
+				return nil, apiErr
+			}
+			return session, nil
+		}
 		if userQuota <= 0 {
 			return nil, types.NewErrorWithStatusCode(
 				errors.New(i18n.T(c, i18n.MsgQuotaUserInsufficient, map[string]any{"Remaining": logger.FormatQuota(userQuota)})),

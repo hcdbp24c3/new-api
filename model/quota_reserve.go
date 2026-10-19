@@ -142,6 +142,16 @@ func persistTokenQuotaDelta(id int, delta int) error {
 
 func reserveUserQuotaDB(id int, quota int) (bool, error) {
 	result := DB.Model(&User{}).
+		Where("id = ? AND unlimited_quota = ?", id, commonTrueVal).
+		Update("quota", gorm.Expr("quota - ?", quota))
+	if result.Error == nil && result.RowsAffected == 1 {
+		return true, nil
+	}
+	if result.Error != nil {
+		return false, result.Error
+	}
+
+	result = DB.Model(&User{}).
 		Where("id = ? AND quota >= ?", id, quota).
 		Update("quota", gorm.Expr("quota - ?", quota))
 	return result.RowsAffected == 1, result.Error
@@ -159,6 +169,8 @@ func reserveTokenQuotaDB(id int, quota int) (bool, error) {
 }
 
 // TryReserveUserQuota atomically checks and deducts a user's wallet quota.
+// An unlimited user always reserves successfully and the wallet balance is
+// left untouched; spending is still recorded through UsedQuota.
 // 缓存命中时以缓存余额为准（避免批量模式下过期的数据库余额放大并发超扣）；
 // Redis 异常或水合失败时降级为数据库条件更新，保证服务可用。
 func TryReserveUserQuota(id int, quota int) (bool, error) {
@@ -166,6 +178,11 @@ func TryReserveUserQuota(id int, quota int) (bool, error) {
 		return false, errors.New("quota cannot be negative")
 	}
 	if quota == 0 {
+		return true, nil
+	}
+	if unlimited, err := IsUserQuotaUnlimited(id); err != nil {
+		return false, err
+	} else if unlimited {
 		return true, nil
 	}
 	if !common.RedisEnabled {

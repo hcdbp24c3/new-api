@@ -441,8 +441,42 @@ func fetchChannelUpstreamModelIDs(channel *model.Channel) ([]string, error) {
 		return service.FetchCodexChannelModels(channel)
 	}
 
+	url, key, headers, err := resolveFetchModelsRequest(channel, baseURL)
+	if err != nil {
+		return nil, err
+	}
+
+	body, err := getFetchModelsResponseBody(http.MethodGet, url, channel, headers)
+	if err != nil {
+		return nil, sanitizeAdvancedCustomRequestError(err, key, url)
+	}
+
+	var result OpenAIModelsResponse
+	if err := common.Unmarshal(body, &result); err != nil {
+		return nil, err
+	}
+	ids := lo.Map(result.Data, func(item OpenAIModel, _ int) string {
+		if channel.Type == constant.ChannelTypeGemini {
+			return strings.TrimPrefix(item.ID, "models/")
+		}
+		return item.ID
+	})
+	return normalizeModelNames(ids), nil
+}
+
+// resolveFetchModelsRequest resolves the model-list request for an
+// OpenAI-compatible channel: the endpoint URL, the key to authenticate with,
+// and the request headers. Callers that only need model IDs and callers that
+// also read per-model metadata share this so the provider quirks above stay in
+// one place.
+func resolveFetchModelsRequest(channel *model.Channel, baseURL string) (string, string, http.Header, error) {
 	var url string
 	switch channel.Type {
+	case constant.ChannelTypeOpenCode:
+		// OpenCode serves its model list under /zen/v1 and /zen/go/v1 while the
+		// base URL is configured without the /v1 segment, like every other
+		// channel. A base URL that still carries it is normalized away.
+		url = fmt.Sprintf("%s/v1/models", strings.TrimSuffix(strings.TrimRight(baseURL, "/"), "/v1"))
 	case constant.ChannelTypeAli:
 		url = fmt.Sprintf("%s/compatible-mode/v1/models", baseURL)
 	case constant.ChannelTypeZhipu_v4:
@@ -474,31 +508,15 @@ func fetchChannelUpstreamModelIDs(channel *model.Channel) ([]string, error) {
 
 	key, _, apiErr := channel.GetNextEnabledKey()
 	if apiErr != nil {
-		return nil, fmt.Errorf("failed to get channel key: %w", apiErr)
+		return "", "", nil, fmt.Errorf("failed to get channel key: %w", apiErr)
 	}
 	key = strings.TrimSpace(key)
 
 	headers, err := buildFetchModelsHeaders(channel, key)
 	if err != nil {
-		return nil, sanitizeFetchModelsError(err, key)
+		return "", "", nil, sanitizeFetchModelsError(err, key)
 	}
-
-	body, err := getFetchModelsResponseBody(http.MethodGet, url, channel, headers)
-	if err != nil {
-		return nil, sanitizeAdvancedCustomRequestError(err, key, url)
-	}
-
-	var result OpenAIModelsResponse
-	if err := common.Unmarshal(body, &result); err != nil {
-		return nil, err
-	}
-	ids := lo.Map(result.Data, func(item OpenAIModel, _ int) string {
-		if channel.Type == constant.ChannelTypeGemini {
-			return strings.TrimPrefix(item.ID, "models/")
-		}
-		return item.ID
-	})
-	return normalizeModelNames(ids), nil
+	return url, key, headers, nil
 }
 
 func fetchAdvancedCustomUpstreamModelIDs(channel *model.Channel, baseURL string) ([]string, error) {
