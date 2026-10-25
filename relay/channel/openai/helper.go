@@ -84,10 +84,3 @@ func handleLastResponse(lastStreamData string, responseId *string, createAt *int
 
 	return nil
 }
-
-func sendResponsesStreamData(c *gin.Context, streamResponse dto.ResponsesStreamResponse, data string) {
-	if data == "" {
-		return
-	}
-	_ = helper.ResponseChunkData(c, streamResponse, data)
-}
