@@ -1,8 +1,10 @@
 package openai
 
 import (
+	"encoding/json"
 	"strings"
 
+	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	relayconstant "github.com/QuantumNous/new-api/relay/constant"
@@ -91,11 +93,7 @@ func ensureOpenCodeGateTools(request *dto.GeneralOpenAIRequest) {
 				Function: dto.FunctionRequest{
 					Name:        "shell",
 					Description: "Execute a shell command",
-					Parameters: map[string]any{
-						"type":       "object",
-						"properties": map[string]any{"command": map[string]any{"type": "string"}},
-						"required":   []string{"command"},
-					},
+					Parameters:  gateToolSchema("command"),
 				},
 			})
 		}
@@ -106,12 +104,21 @@ func ensureOpenCodeGateTools(request *dto.GeneralOpenAIRequest) {
 			Function: dto.FunctionRequest{
 				Name:        "read",
 				Description: "Read a file from disk",
-				Parameters: map[string]any{
-					"type":       "object",
-					"properties": map[string]any{"path": map[string]any{"type": "string"}},
-					"required":   []string{"path"},
-				},
+					Parameters:  gateToolSchema("path"),
 			},
 		})
 	}
+}
+
+// gateToolSchema builds the single-required-string-argument schema for the
+// synthetic opencode gate tools. dto.FunctionRequest.Parameters is
+// json.RawMessage, so the schema is marshalled rather than assigned as a map.
+func gateToolSchema(required string) json.RawMessage {
+	schema := map[string]any{
+		"type":       "object",
+		"properties": map[string]any{required: map[string]any{"type": "string"}},
+		"required":   []string{required},
+	}
+	raw, _ := common.Marshal(schema)
+	return raw
 }
