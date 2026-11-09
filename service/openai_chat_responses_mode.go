@@ -23,3 +23,15 @@ func ChannelTargetsResponses(settings dto.ChannelOtherSettings) bool {
 	return false
 }
 
+// ChannelTargetsChat checks if the channel's configured or detected api type is chat.
+func ChannelTargetsChat(settings dto.ChannelOtherSettings) bool {
+	if settings.UpstreamApiType == dto.ChannelApiTypeChat {
+		return true
+	}
+	if settings.UpstreamApiType == dto.ChannelApiTypeAuto && settings.DetectedApiType == dto.ChannelApiTypeChat {
+		return true
+	}
+	return false
+}
+
+

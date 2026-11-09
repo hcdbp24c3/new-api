@@ -61,37 +61,81 @@ func fetchChannelUpstreamModelMetadata(channel *model.Channel) (map[string]upstr
 		return nil, sanitizeAdvancedCustomRequestError(err, key, url)
 	}
 
-	var result OpenAIModelsResponse
-	if err := common.Unmarshal(body, &result); err != nil {
+	var rawResult struct {
+		Data    []map[string]any `json:"data"`
+		Success bool             `json:"success"`
+	}
+	if err := common.Unmarshal(body, &rawResult); err != nil {
 		return nil, err
 	}
-	return openAIChannelModelMetadata(result.Data), nil
+	return openAIRawChannelModelMetadata(rawResult.Data), nil
 }
 
-// openAIChannelModelMetadata reads the capability metadata that OpenAI-
-// compatible providers sometimes attach to a model entry. Most return only
-// id/created/owned_by, so those entries contribute nothing and the model keeps
-// resolving through models.dev.
 func openAIChannelModelMetadata(items []OpenAIModel) map[string]upstreamModelMetadata {
+	rawItems := make([]map[string]any, 0, len(items))
+	for _, item := range items {
+		m := map[string]any{
+			"id":       item.ID,
+			"metadata": item.Metadata,
+		}
+		rawItems = append(rawItems, m)
+	}
+	return openAIRawChannelModelMetadata(rawItems)
+}
+
+func openAIRawChannelModelMetadata(items []map[string]any) map[string]upstreamModelMetadata {
 	metadata := make(map[string]upstreamModelMetadata, len(items))
 	for _, item := range items {
-		if item.ID == "" {
+		id, _ := item["id"].(string)
+		if id == "" {
 			continue
 		}
+		// Search both root level and nested metadata map
+		var metaMap map[string]any
+		if nested, ok := item["metadata"].(map[string]any); ok {
+			metaMap = nested
+		}
+		getContextLength := func() int {
+			if v := positiveMetadataInt(item, "context_length", "contextLength", "max_context_length", "max_input_tokens"); v > 0 {
+				return v
+			}
+			return positiveMetadataInt(metaMap, "context_length", "contextLength", "max_context_length", "max_input_tokens")
+		}
+		getMaxOutputTokens := func() int {
+			if v := positiveMetadataInt(item, "max_output_tokens", "maxOutputTokens", "max_tokens"); v > 0 {
+				return v
+			}
+			return positiveMetadataInt(metaMap, "max_output_tokens", "maxOutputTokens", "max_tokens")
+		}
+		getDescription := func() string {
+			if d, ok := metadataString(item, "description"); ok {
+				return d
+			}
+			if d, ok := metadataString(metaMap, "description"); ok {
+				return d
+			}
+			return ""
+		}
+		getToolCall := func() *bool {
+			if tc, ok := metadataBool(item, "tool_call", "toolCall", "supports_tools", "supportsTools"); ok {
+				return lo.ToPtr(tc)
+			}
+			if tc, ok := metadataBool(metaMap, "tool_call", "toolCall", "supports_tools", "supportsTools"); ok {
+				return lo.ToPtr(tc)
+			}
+			return nil
+		}
+
 		entry := upstreamModelMetadata{
-			ContextLength:   positiveMetadataInt(item.Metadata, "context_length", "contextLength", "max_context_length", "max_input_tokens"),
-			MaxOutputTokens: positiveMetadataInt(item.Metadata, "max_output_tokens", "maxOutputTokens", "max_tokens"),
-		}
-		if description, ok := metadataString(item.Metadata, "description"); ok {
-			entry.Description = description
-		}
-		if toolCall, ok := metadataBool(item.Metadata, "tool_call", "toolCall", "supports_tools", "supportsTools"); ok {
-			entry.ToolCall = lo.ToPtr(toolCall)
+			ContextLength:   getContextLength(),
+			MaxOutputTokens: getMaxOutputTokens(),
+			Description:     getDescription(),
+			ToolCall:        getToolCall(),
 		}
 		if entry == (upstreamModelMetadata{}) {
 			continue
 		}
-		metadata[item.ID] = entry
+		metadata[id] = entry
 	}
 	return metadata
 }

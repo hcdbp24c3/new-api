@@ -365,6 +365,17 @@ func SyncModelsDevPreview(c *gin.Context) {
 				return prefixed, true
 			}
 		}
+		// Also try without namespace/vendor prefix if devID carries one (e.g. "openai/gpt-4o" -> "gpt-4o")
+		if _, bare, ok := strings.Cut(devID, "/"); ok && bare != "" {
+			if local, ok := modelByName[bare]; ok {
+				return local, true
+			}
+			for prefix := range channelPrefixSet {
+				if prefixed, ok := modelByName[prefix+bare]; ok {
+					return prefixed, true
+				}
+			}
+		}
 		return nil, false
 	}
 
