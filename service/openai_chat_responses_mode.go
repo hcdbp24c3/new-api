@@ -28,7 +28,14 @@ func ChannelTargetsChat(settings dto.ChannelOtherSettings) bool {
 	if settings.UpstreamApiType == dto.ChannelApiTypeChat {
 		return true
 	}
-	if settings.UpstreamApiType == dto.ChannelApiTypeAuto && settings.DetectedApiType == dto.ChannelApiTypeChat {
+	if settings.UpstreamApiType == dto.ChannelApiTypeResponses {
+		return false
+	}
+	if settings.UpstreamApiType == dto.ChannelApiTypeAuto || settings.UpstreamApiType == "" {
+		if settings.DetectedApiType == dto.ChannelApiTypeResponses {
+			return false
+		}
+		// Standard channels default to chat completions
 		return true
 	}
 	return false

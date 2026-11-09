@@ -323,6 +323,41 @@ func TestOaiChatToResponsesStreamHandlerRestoresCodexCustomToolCall(t *testing.T
 	)
 }
 
+func TestOaiChatToResponsesHandlerJSON(t *testing.T) {
+	oldMode := gin.Mode()
+	gin.SetMode(gin.TestMode)
+	t.Cleanup(func() { gin.SetMode(oldMode) })
+
+	jsonBody := `{"id":"chatcmpl_test","object":"chat.completion","created":1710000000,"model":"gpt-test","choices":[{"index":0,"message":{"role":"assistant","content":"hello world"},"finish_reason":"stop"}],"usage":{"prompt_tokens":10,"completion_tokens":5,"total_tokens":15}}`
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+	c.Set(common.RequestIdKey, "chat-to-responses-json-test")
+
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Body:       io.NopCloser(strings.NewReader(jsonBody)),
+		Header:     http.Header{"Content-Type": []string{"application/json"}},
+	}
+	info := &relaycommon.RelayInfo{
+		ChannelMeta:        &relaycommon.ChannelMeta{UpstreamModelName: "gpt-test"},
+		IsStream:           false,
+		RelayFormat:        types.RelayFormatOpenAIResponses,
+		ShouldIncludeUsage: true,
+	}
+
+	usage, err := OaiChatToResponsesHandler(c, info, resp)
+	require.Nil(t, err)
+	require.NotNil(t, usage)
+	assert.Equal(t, 10, usage.PromptTokens)
+	assert.Equal(t, 5, usage.CompletionTokens)
+
+	got := recorder.Body.String()
+	var responsesResp dto.OpenAIResponsesResponse
+	require.NoError(t, common.Unmarshal([]byte(got), &responsesResp))
+	assert.Equal(t, `"completed"`, string(responsesResp.Status))
+}
+
 func requireOrderedSubstrings(t *testing.T, s string, parts ...string) {
 	t.Helper()
 

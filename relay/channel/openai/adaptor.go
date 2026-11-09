@@ -749,6 +749,17 @@ func detectImageMimeType(filename string) string {
 }
 
 func (a *Adaptor) ConvertOpenAIResponsesRequest(c *gin.Context, info *relaycommon.RelayInfo, request dto.OpenAIResponsesRequest) (any, error) {
+	if info != nil && service.ChannelTargetsChat(info.ChannelOtherSettings) {
+		converted, convertErr := service.ConvertRequestByID(c, info, relayconvert.ConverterOpenAIResponsesToOpenAIChat, &request)
+		if convertErr != nil {
+			return nil, convertErr
+		}
+		if req, ok := converted.Value.(*dto.GeneralOpenAIRequest); ok {
+			return a.ConvertOpenAIRequest(c, info, req)
+		}
+		return converted.Value, nil
+	}
+
 	//  转换模型推理力度后缀
 	effort, originModel := reasoning.ParseOpenAIReasoningEffortFromModelSuffix(request.Model)
 	preserveSuffix := model_setting.ShouldPreserveThinkingSuffix(request.Model) || (info != nil && model_setting.ShouldPreserveThinkingSuffix(info.OriginModelName))
@@ -815,14 +826,6 @@ func (a *Adaptor) ConvertOpenAIResponsesRequest(c *gin.Context, info *relaycommo
 		if info != nil {
 			info.SetReasoningEffort(string(canonicalEffort))
 		}
-	}
-
-	if info != nil && service.ChannelTargetsChat(info.ChannelOtherSettings) {
-		converted, convertErr := service.ConvertRequestByID(c, info, relayconvert.ConverterOpenAIResponsesToOpenAIChat, &request)
-		if convertErr != nil {
-			return nil, convertErr
-		}
-		return converted.Value, nil
 	}
 	return request, nil
 }

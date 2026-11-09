@@ -176,6 +176,9 @@ func TestTextRequestViaResponsesConvertsClaudeDirectly(t *testing.T) {
 			ChannelBaseUrl:    server.URL,
 			ApiKey:            "test-key",
 			UpstreamModelName: "gpt-5.6-sol",
+			ChannelOtherSettings: dto.ChannelOtherSettings{
+				UpstreamApiType: dto.ChannelApiTypeResponses,
+			},
 		},
 	}
 	adaptor := &openaichannel.Adaptor{}
