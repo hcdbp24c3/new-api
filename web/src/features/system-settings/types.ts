@@ -228,6 +228,7 @@ export type ContentSettings = {
 
 export type ModelSettings = {
   'global.pass_through_request_enabled': boolean
+  'global.privacy_secret_masking_enabled': boolean
   'global.thinking_model_blacklist': string
   'general_setting.ping_interval_enabled': boolean
   'general_setting.ping_interval_seconds': number

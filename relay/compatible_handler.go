@@ -153,7 +153,7 @@ func TextHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *types
 			}
 		}
 
-		if info.ChannelOtherSettings.PrivacySecretMasking {
+		if info.ChannelOtherSettings.PrivacySecretMasking || model_setting.GetGlobalSettings().PrivacySecretMaskingEnabled {
 			reqID := c.GetString(common.RequestIdKey)
 			maskSession := helper.NewSecretMaskSession()
 			maskedStr := maskSession.MaskSecrets(string(jsonData))

@@ -2166,7 +2166,7 @@ export function ChannelMutateDrawer({
     />
   )
 
-  const upstreamApiTypeFields = (currentType === 1 || currentType === 8 || currentType === 60) && (
+  const upstreamApiTypeFields = currentType !== CHANNEL_TYPE_TASK_PLUGIN && (
     <FormField
       control={form.control}
       name='upstream_api_type'

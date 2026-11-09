@@ -26,6 +26,7 @@ import {
 
 const defaultModelSettings: ModelSettings = {
   'global.pass_through_request_enabled': false,
+  'global.privacy_secret_masking_enabled': false,
   'global.thinking_model_blacklist': '[]',
   'general_setting.ping_interval_enabled': false,
   'general_setting.ping_interval_seconds': 60,

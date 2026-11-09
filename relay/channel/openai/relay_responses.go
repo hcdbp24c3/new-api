@@ -13,6 +13,7 @@ import (
 	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/relaykit/types"
 	"github.com/QuantumNous/new-api/service"
+	"github.com/QuantumNous/new-api/setting/model_setting"
 
 	"github.com/MoeForge/moego/ojson"
 	"github.com/gin-gonic/gin"
@@ -37,6 +38,18 @@ func OaiResponsesHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http
 
 	info.ObserveResponseModel(responsesResponse.Model)
 	responseBody = rewriteSGLangResponsesCreatedAt(info, responseBody, "created_at", responsesResponse.CreatedAt)
+
+	isMasking := false
+	if info != nil && info.ChannelMeta != nil && info.ChannelOtherSettings.PrivacySecretMasking {
+		isMasking = true
+	} else if gs := model_setting.GetGlobalSettings(); gs != nil && gs.PrivacySecretMaskingEnabled {
+		isMasking = true
+	}
+	if isMasking && c != nil {
+		if maskSession := helper.GetAndRemoveMaskSession(c.GetString(common.RequestIdKey)); maskSession != nil {
+			responseBody = []byte(maskSession.UnmaskSecrets(string(responseBody)))
+		}
+	}
 
 	// 写入新的 response body
 	service.IOCopyBytesGracefully(c, resp, responseBody)
@@ -105,7 +118,7 @@ func OaiResponsesStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp
 }
 
 func rewriteSGLangResponsesCreatedAt(info *relaycommon.RelayInfo, payload []byte, path string, createdAt dto.IntValue) []byte {
-	if info.GetChannelType() != constant.ChannelTypeSGLang {
+	if info == nil || info.GetChannelType() != constant.ChannelTypeSGLang {
 		return payload
 	}
 	if !ojson.GetBytes(payload, path).Exists() {

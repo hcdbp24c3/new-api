@@ -13,6 +13,7 @@ import (
 	"github.com/QuantumNous/new-api/relaykit/relayconvert"
 	"github.com/QuantumNous/new-api/relaykit/types"
 	"github.com/QuantumNous/new-api/service"
+	"github.com/QuantumNous/new-api/setting/model_setting"
 	"github.com/gin-gonic/gin"
 )
 
@@ -59,6 +60,18 @@ func OaiChatToResponsesHandler(c *gin.Context, info *relaycommon.RelayInfo, resp
 		return nil, types.NewOpenAIError(err, types.ErrorCodeJsonMarshalFailed, http.StatusInternalServerError)
 	}
 
+	isMasking := false
+	if info != nil && info.ChannelMeta != nil && info.ChannelOtherSettings.PrivacySecretMasking {
+		isMasking = true
+	} else if gs := model_setting.GetGlobalSettings(); gs != nil && gs.PrivacySecretMaskingEnabled {
+		isMasking = true
+	}
+	if isMasking && c != nil {
+		if maskSession := helper.GetAndRemoveMaskSession(c.GetString(common.RequestIdKey)); maskSession != nil {
+			responseBody = []byte(maskSession.UnmaskSecrets(string(responseBody)))
+		}
+	}
+
 	service.IOCopyBytesGracefully(c, resp, responseBody)
 	return usage, nil
 }
@@ -68,6 +81,9 @@ func OaiChatToResponsesStreamHandler(c *gin.Context, info *relaycommon.RelayInfo
 		return nil, types.NewOpenAIError(fmt.Errorf("invalid response"), types.ErrorCodeBadResponse, http.StatusInternalServerError)
 	}
 	defer service.CloseResponseBodyGracefully(resp)
+
+	helper.SetEventStreamHeaders(c)
+	defer helper.GetAndRemoveMaskSession(c.GetString(common.RequestIdKey))
 
 	responseID := helper.GetResponseID(c)
 	state, err := relayconvert.NewResponseStreamState(types.RelayFormatOpenAI, types.RelayFormatOpenAIResponses, relayconvert.ResponseStreamOptions{
@@ -89,7 +105,19 @@ func OaiChatToResponsesStreamHandler(c *gin.Context, info *relaycommon.RelayInfo
 			streamErr = types.NewOpenAIError(err, types.ErrorCodeJsonMarshalFailed, http.StatusInternalServerError)
 			return false
 		}
-		if err := helper.ResponseChunkData(c, dto.ResponsesStreamResponse{Type: event.Type}, string(data)); err != nil {
+		dataStr := string(data)
+		isMasking := false
+		if info != nil && info.ChannelMeta != nil && info.ChannelOtherSettings.PrivacySecretMasking {
+			isMasking = true
+		} else if gs := model_setting.GetGlobalSettings(); gs != nil && gs.PrivacySecretMaskingEnabled {
+			isMasking = true
+		}
+		if isMasking && c != nil {
+			if maskSession := helper.GetMaskSession(c.GetString(common.RequestIdKey)); maskSession != nil {
+				dataStr = maskSession.UnmaskSecrets(dataStr)
+			}
+		}
+		if err := helper.ResponseChunkData(c, dto.ResponsesStreamResponse{Type: event.Type}, dataStr); err != nil {
 			// When the client went away the upstream already produced output,
 			// so the stream stops and settles normally instead of failing; any
 			// other write error stays a server error.

@@ -100,6 +100,14 @@ func PrepareResponsesRequest(c *gin.Context, info *relaycommon.RelayInfo, req *d
 		}
 	}
 
+	if info.ChannelOtherSettings.PrivacySecretMasking || model_setting.GetGlobalSettings().PrivacySecretMaskingEnabled {
+		reqID := c.GetString(common.RequestIdKey)
+		maskSession := helper.NewSecretMaskSession()
+		maskedStr := maskSession.MaskSecrets(string(jsonData))
+		jsonData = []byte(maskedStr)
+		helper.StoreMaskSession(reqID, maskSession)
+	}
+
 	logger.LogDebug(c, "requestBody: %s", jsonData)
 	body, closer, err := relaycommon.NewOutboundJSONBody(jsonData)
 	if err != nil {

@@ -11,8 +11,9 @@ import (
 )
 
 type GlobalSettings struct {
-	PassThroughRequestEnabled bool     `json:"pass_through_request_enabled"`
-	ThinkingModelBlacklist    []string `json:"thinking_model_blacklist"`
+	PassThroughRequestEnabled   bool     `json:"pass_through_request_enabled"`
+	PrivacySecretMaskingEnabled bool     `json:"privacy_secret_masking_enabled"`
+	ThinkingModelBlacklist      []string `json:"thinking_model_blacklist"`
 	// EffortTailModelIDs lists real model IDs that sit inside the GPT/o-series
 	// family whitelist but whose names already end in an effort word.
 	EffortTailModelIDs []string `json:"effort_tail_model_ids"`

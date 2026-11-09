@@ -83,6 +83,18 @@ func StoreMaskSession(requestID string, session *SecretMaskSession) {
 	}
 }
 
+// GetMaskSession retrieves the mask session without removing it.
+func GetMaskSession(requestID string) *SecretMaskSession {
+	if requestID == "" {
+		return nil
+	}
+	val, ok := maskSessionPool.Load(requestID)
+	if !ok || val == nil {
+		return nil
+	}
+	return val.(*SecretMaskSession)
+}
+
 // GetAndRemoveMaskSession retrieves and cleans up the mask session.
 func GetAndRemoveMaskSession(requestID string) *SecretMaskSession {
 	if requestID == "" {

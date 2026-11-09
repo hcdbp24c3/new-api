@@ -69,6 +69,7 @@ const jsonString = z.string().refine((value) => {
 const schema = z.object({
   global: z.object({
     pass_through_request_enabled: z.boolean(),
+    privacy_secret_masking_enabled: z.boolean().optional(),
     thinking_model_blacklist: jsonString,
   }),
   general_setting: z.object({
@@ -82,6 +83,7 @@ type GlobalModelSettingsFormInput = z.input<typeof schema>
 
 type FlatGlobalModelSettings = {
   'global.pass_through_request_enabled': boolean
+  'global.privacy_secret_masking_enabled': boolean
   'global.thinking_model_blacklist': string
   'general_setting.ping_interval_enabled': boolean
   'general_setting.ping_interval_seconds': number
@@ -92,6 +94,8 @@ const flattenGlobalValues = (
 ): FlatGlobalModelSettings => ({
   'global.pass_through_request_enabled':
     values.global.pass_through_request_enabled,
+  'global.privacy_secret_masking_enabled':
+    values.global.privacy_secret_masking_enabled ?? false,
   'global.thinking_model_blacklist': normalizeJsonText(
     values.global.thinking_model_blacklist,
     '[]'
@@ -175,6 +179,29 @@ export function GlobalSettingsCard({ defaultValues }: GlobalSettingsCardProps) {
                 <FormControl>
                   <Switch
                     checked={field.value}
+                    onCheckedChange={field.onChange}
+                  />
+                </FormControl>
+              </SettingsSwitchItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name='global.privacy_secret_masking_enabled'
+            render={({ field }) => (
+              <SettingsSwitchItem>
+                <SettingsSwitchContent>
+                  <FormLabel>{t('Global Privacy & Secret Masking')}</FormLabel>
+                  <FormDescription>
+                    {t(
+                      'Automatically mask API keys, passwords, and tokens before sending requests to all upstream providers and restore them in responses.'
+                    )}
+                  </FormDescription>
+                </SettingsSwitchContent>
+                <FormControl>
+                  <Switch
+                    checked={field.value ?? false}
                     onCheckedChange={field.onChange}
                   />
                 </FormControl>

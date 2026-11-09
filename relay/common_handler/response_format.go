@@ -12,11 +12,24 @@ import (
 	"github.com/QuantumNous/new-api/relaykit/relayconvert"
 	"github.com/QuantumNous/new-api/relaykit/types"
 	"github.com/QuantumNous/new-api/service"
+	"github.com/QuantumNous/new-api/setting/model_setting"
 
 	"github.com/gin-gonic/gin"
 )
 
 func HandleStreamFormat(c *gin.Context, info *relaycommon.RelayInfo, data string, forceFormat bool, thinkToContent bool) error {
+	isMasking := false
+	if info != nil && info.ChannelMeta != nil && info.ChannelOtherSettings.PrivacySecretMasking {
+		isMasking = true
+	} else if gs := model_setting.GetGlobalSettings(); gs != nil && gs.PrivacySecretMaskingEnabled {
+		isMasking = true
+	}
+	if isMasking && c != nil {
+		if maskSession := helper.GetMaskSession(c.GetString(common.RequestIdKey)); maskSession != nil {
+			data = maskSession.UnmaskSecrets(data)
+		}
+	}
+
 	switch info.RelayFormat {
 	case types.RelayFormatOpenAI:
 		info.SendResponseCount++
@@ -191,6 +204,12 @@ func HandleFinalResponse(c *gin.Context, info *relaycommon.RelayInfo, lastStream
 func SendStreamData(c *gin.Context, info *relaycommon.RelayInfo, data string, forceFormat bool, thinkToContent bool) error {
 	if data == "" {
 		return nil
+	}
+
+	if info.ChannelOtherSettings.PrivacySecretMasking || model_setting.GetGlobalSettings().PrivacySecretMaskingEnabled {
+		if maskSession := helper.GetMaskSession(c.GetString(common.RequestIdKey)); maskSession != nil {
+			data = maskSession.UnmaskSecrets(data)
+		}
 	}
 
 	if !forceFormat && !thinkToContent {

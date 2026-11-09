@@ -17,6 +17,7 @@ import (
 	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/relaykit/types"
 	"github.com/QuantumNous/new-api/service"
+	"github.com/QuantumNous/new-api/setting/model_setting"
 	"github.com/QuantumNous/new-api/tokenkit"
 
 	"github.com/MoeForge/moego/ojson"
@@ -30,6 +31,7 @@ func OaiStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Re
 	}
 
 	defer service.CloseResponseBodyGracefully(resp)
+	defer helper.GetAndRemoveMaskSession(c.GetString(common.RequestIdKey))
 
 	model := info.UpstreamModelName
 	var responseId string
@@ -344,7 +346,13 @@ func OpenaiHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Respo
 		responseBody = geminiRespStr
 	}
 
-	if info.ChannelOtherSettings.PrivacySecretMasking {
+	isMasking := false
+	if info != nil && info.ChannelMeta != nil && info.ChannelOtherSettings.PrivacySecretMasking {
+		isMasking = true
+	} else if gs := model_setting.GetGlobalSettings(); gs != nil && gs.PrivacySecretMaskingEnabled {
+		isMasking = true
+	}
+	if isMasking && c != nil {
 		if maskSession := helper.GetAndRemoveMaskSession(c.GetString(common.RequestIdKey)); maskSession != nil {
 			responseBody = []byte(maskSession.UnmaskSecrets(string(responseBody)))
 		}
