@@ -12,18 +12,34 @@ func ShouldChatCompletionsUseResponsesGlobal(channelID int, channelType int, mod
 	return false
 }
 
-// ChannelTargetsResponses checks if the channel's configured or detected api type is responses.
+// ChannelSupportsProtocol checks if the channel explicitly supports a given protocol tag.
+func ChannelSupportsProtocol(settings dto.ChannelOtherSettings, protocol string) bool {
+	for _, p := range settings.SupportedApiProtocols {
+		if p == protocol {
+			return true
+		}
+	}
+	return false
+}
+
+// ChannelTargetsResponses checks if the channel's configured, detected, or tagged api type is responses.
 func ChannelTargetsResponses(settings dto.ChannelOtherSettings) bool {
 	if settings.UpstreamApiType == dto.ChannelApiTypeResponses {
 		return true
 	}
-	if settings.UpstreamApiType == dto.ChannelApiTypeAuto && settings.DetectedApiType == dto.ChannelApiTypeResponses {
+	if settings.UpstreamApiType == dto.ChannelApiTypeChat {
+		return false
+	}
+	if ChannelSupportsProtocol(settings, "responses") {
+		return true
+	}
+	if settings.DetectedApiType == dto.ChannelApiTypeResponses {
 		return true
 	}
 	return false
 }
 
-// ChannelTargetsChat checks if the channel's configured or detected api type is chat.
+// ChannelTargetsChat checks if the channel's configured, detected, or tagged api type is chat.
 func ChannelTargetsChat(settings dto.ChannelOtherSettings) bool {
 	if settings.UpstreamApiType == dto.ChannelApiTypeChat {
 		return true
@@ -31,14 +47,17 @@ func ChannelTargetsChat(settings dto.ChannelOtherSettings) bool {
 	if settings.UpstreamApiType == dto.ChannelApiTypeResponses {
 		return false
 	}
-	if settings.UpstreamApiType == dto.ChannelApiTypeAuto || settings.UpstreamApiType == "" {
-		if settings.DetectedApiType == dto.ChannelApiTypeResponses {
-			return false
-		}
-		// Standard channels default to chat completions
+	if ChannelSupportsProtocol(settings, "chat") {
 		return true
 	}
-	return false
+	if settings.DetectedApiType == dto.ChannelApiTypeChat {
+		return true
+	}
+	if settings.DetectedApiType == dto.ChannelApiTypeResponses {
+		return false
+	}
+	// Default to chat if no other tags or settings are provided
+	return true
 }
 
 

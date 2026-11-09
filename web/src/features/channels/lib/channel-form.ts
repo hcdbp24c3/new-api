@@ -285,6 +285,7 @@ export const channelFormSchema = z
     aws_api_type: z.enum(['invoke_model', 'mantle']).optional(),
     upstream_api_type: z.enum(['', 'chat', 'responses', 'anthropic', 'gemini']).optional(),
     detected_api_type: z.enum(['', 'chat', 'responses', 'anthropic', 'gemini']).optional(),
+    supported_api_protocols: z.array(z.string()).optional(),
     azure_responses_version: z.string().optional(), // Azure specific
     // Field passthrough controls (stored in settings JSON)
     allow_service_tier: z.boolean().optional(), // OpenAI/Anthropic
@@ -489,6 +490,7 @@ export const CHANNEL_FORM_DEFAULT_VALUES: ChannelFormValues = {
   aws_api_type: 'invoke_model',
   upstream_api_type: '',
   detected_api_type: '',
+  supported_api_protocols: [],
   azure_responses_version: '',
   // Field passthrough controls
   allow_service_tier: false,
@@ -587,6 +589,7 @@ export function transformChannelToFormDefaults(
   let upstreamModelUpdateIgnoredModels = ''
   let advancedCustom = ''
   let modelPrefix = ''
+  let supportedApiProtocols: string[] = []
   let privacySecretMasking = false
   let autoUpdateBalance = false
 
@@ -603,6 +606,9 @@ export function transformChannelToFormDefaults(
       awsApiType = parsed.aws_api_type || 'invoke_model'
       upstreamApiType = parsed.upstream_api_type || ''
       detectedApiType = parsed.detected_api_type || ''
+      supportedApiProtocols = Array.isArray(parsed.supported_api_protocols)
+        ? parsed.supported_api_protocols
+        : []
       allowServiceTier = parsed.allow_service_tier === true
       disableStore = parsed.disable_store === true
       allowSafetyIdentifier = parsed.allow_safety_identifier === true
@@ -716,6 +722,7 @@ export function transformChannelToFormDefaults(
     aws_api_type: awsApiType,
     upstream_api_type: upstreamApiType,
     detected_api_type: detectedApiType,
+    supported_api_protocols: supportedApiProtocols,
     allow_service_tier: allowServiceTier,
     disable_store: disableStore,
     allow_include_obfuscation: allowIncludeObfuscation,
@@ -838,6 +845,10 @@ function buildSettingsJSON(formData: ChannelFormValues): string {
     settingsObj.upstream_api_type = formData.upstream_api_type
   } else {
     delete settingsObj.upstream_api_type
+  }
+
+  if (Array.isArray(formData.supported_api_protocols) && formData.supported_api_protocols.length > 0) {
+    settingsObj.supported_api_protocols = formData.supported_api_protocols
   }
 
   // Field passthrough controls:

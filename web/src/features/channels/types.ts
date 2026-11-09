@@ -98,6 +98,7 @@ export interface ChannelOtherSettings {
   azure_responses_version?: string
   upstream_api_type?: '' | 'chat' | 'responses' | 'anthropic' | 'gemini'
   detected_api_type?: '' | 'chat' | 'responses' | 'anthropic' | 'gemini'
+  supported_api_protocols?: string[]
   vertex_key_type?: 'json' | 'api_key'
   vertex_project_id?: string
   vertex_api_version?: 'v1' | 'v1beta1'

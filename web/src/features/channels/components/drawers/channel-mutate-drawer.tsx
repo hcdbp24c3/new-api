@@ -2174,11 +2174,18 @@ export function ChannelMutateDrawer({
         <FormItem className='space-y-2 px-4 py-3'>
           <div className='flex items-center justify-between'>
             <FormLabel>{t('Upstream API Protocol')}</FormLabel>
-            {form.watch('detected_api_type') && (
-              <span className='text-muted-foreground text-xs font-mono'>
-                {t('Detected')}: {form.watch('detected_api_type')}
-              </span>
-            )}
+            <div className='flex items-center gap-1.5'>
+              {form.watch('detected_api_type') && (
+                <span className='bg-primary/10 text-primary px-2 py-0.5 rounded text-xs font-mono font-medium'>
+                  {t('Detected')}: {form.watch('detected_api_type')}
+                </span>
+              )}
+              {Array.isArray(form.watch('supported_api_protocols')) && form.watch('supported_api_protocols')?.map((proto: string) => (
+                <span key={proto} className='bg-muted text-muted-foreground px-1.5 py-0.5 rounded text-xs font-mono'>
+                  {proto}
+                </span>
+              ))}
+            </div>
           </div>
           <Select
             disabled={sensitiveLocked}

@@ -1051,8 +1051,10 @@ func TestChannel(c *gin.Context) {
 				result = altResult
 				if altEndpoint == string(constant.EndpointTypeOpenAIResponse) {
 					other.DetectedApiType = dto.ChannelApiTypeResponses
+					other.SupportedApiProtocols = []string{"responses"}
 				} else {
 					other.DetectedApiType = dto.ChannelApiTypeChat
+					other.SupportedApiProtocols = []string{"chat"}
 				}
 				channel.SetOtherSettings(other)
 				_ = model.DB.Model(channel).Update("settings", channel.OtherSettings).Error
@@ -1065,8 +1067,11 @@ func TestChannel(c *gin.Context) {
 		detected := dto.ChannelApiTypeChat
 		if normalizeChannelTestEndpoint(channel, "") == string(constant.EndpointTypeOpenAIResponse) {
 			detected = dto.ChannelApiTypeResponses
+			other.SupportedApiProtocols = []string{"responses"}
+		} else {
+			other.SupportedApiProtocols = []string{"chat"}
 		}
-		if other.DetectedApiType != detected {
+		if other.DetectedApiType != detected || len(other.SupportedApiProtocols) > 0 {
 			other.DetectedApiType = detected
 			channel.SetOtherSettings(other)
 			_ = model.DB.Model(channel).Update("settings", channel.OtherSettings).Error
