@@ -1,9 +1,11 @@
 package oaichat
 
 import (
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"math"
+	"strconv"
 	"strings"
 
 	"context"
@@ -204,9 +206,15 @@ func OpenAIChatRequestToGeminiGenerateContent(c context.Context, textRequest dto
 			}
 			parts := &geminiRequest.Contents[len(geminiRequest.Contents)-1].Parts
 			name := ""
+			cleanToolCallID := message.ToolCallId
+			if idx := strings.Index(cleanToolCallID, "__ts__"); idx != -1 {
+				cleanToolCallID = cleanToolCallID[:idx]
+			}
 			if message.Name != nil {
 				name = *message.Name
 			} else if val, exists := toolCallIDs[message.ToolCallId]; exists {
+				name = val
+			} else if val, exists := toolCallIDs[cleanToolCallID]; exists {
 				name = val
 			}
 			var contentMap map[string]any
@@ -225,8 +233,8 @@ func OpenAIChatRequestToGeminiGenerateContent(c context.Context, textRequest dto
 				Name:     name,
 				Response: contentMap,
 			}
-			if message.ToolCallId != "" {
-				id, err := kitutil.Marshal(message.ToolCallId)
+			if cleanToolCallID != "" {
+				id, err := kitutil.Marshal(cleanToolCallID)
 				if err != nil {
 					return nil, fmt.Errorf("failed to marshal function response ID: %w", err)
 				}
@@ -253,18 +261,32 @@ func OpenAIChatRequestToGeminiGenerateContent(c context.Context, textRequest dto
 						return nil, fmt.Errorf("invalid arguments for function %s, args: %s", call.Function.Name, call.Function.Arguments)
 					}
 				}
+				callID := call.ID
+				var embeddedSig string
+				if idx := strings.Index(callID, "__ts__"); idx != -1 {
+					sigB64 := callID[idx+6:]
+					callID = callID[:idx]
+					if rawSig, err := base64.RawURLEncoding.DecodeString(sigB64); err == nil && len(rawSig) > 0 {
+						embeddedSig = string(rawSig)
+					}
+				}
 				toolCall := dto.GeminiPart{
 					FunctionCall: &dto.FunctionCall{
-						ID:           call.ID,
+						ID:           callID,
 						FunctionName: call.Function.Name,
 						Arguments:    args,
 					},
 				}
-				if shouldAttachThoughtSignature && !signatureAttached && sharedgemini.AttachFunctionCallThoughtSignature(opts, &toolCall) {
+				if embeddedSig != "" {
+					toolCall.ThoughtSignature = []byte(strconv.Quote(embeddedSig))
+				} else if shouldAttachThoughtSignature && !signatureAttached && sharedgemini.AttachFunctionCallThoughtSignature(opts, &toolCall) {
 					signatureAttached = true
 				}
 				parts = append(parts, toolCall)
 				toolCallIDs[call.ID] = call.Function.Name
+				if callID != call.ID {
+					toolCallIDs[callID] = call.Function.Name
+				}
 			}
 		}
 

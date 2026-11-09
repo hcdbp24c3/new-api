@@ -242,6 +242,10 @@ var defaultModelRatio = map[string]float64{
 	"deepseek-chat":          0.27 / 2,
 	"deepseek-coder":         0.27 / 2,
 	"deepseek-reasoner":      0.55 / 2, // 0.55 / 1k tokens
+	"deepseek-flash":         0.14 / 2,
+	"deepseek-v4-flash":      0.14 / 2,
+	"deepseek-v3":            0.27 / 2,
+	"deepseek-r1":            0.55 / 2,
 	// Perplexity online 模型对搜索额外收费，有需要应自行调整，此处不计入搜索费用
 	"llama-3-sonar-small-32k-chat":   0.2 / 1000 * USD,
 	"llama-3-sonar-small-32k-online": 0.2 / 1000 * USD,
@@ -387,7 +391,14 @@ func GetModelRatio(name string) (float64, bool, string) {
 
 	ratio, ok := modelRatioMap.Get(name)
 	if !ok {
-		return 37.5, operation_setting.SelfUseModeEnabled, name
+		// Try stripped model name if it carries a provider/namespace prefix
+		if _, after, found := strings.Cut(name, "/"); found && after != "" {
+			if strippedRatio, foundOk := modelRatioMap.Get(after); foundOk {
+				return strippedRatio, true, after
+			}
+		}
+		// Default to 1.0 (standard 1x base = $0.002/1k) instead of 37.5 ($0.075/1k) to prevent astronomical unexpected billing
+		return 1.0, operation_setting.SelfUseModeEnabled, name
 	}
 	return ratio, true, name
 }
@@ -764,5 +775,5 @@ func GetModelRatioOrPrice(model string) (float64, bool, bool) { // price or rati
 	if success {
 		return modelRatio, false, true
 	}
-	return 37.5, false, false
+	return 1.0, false, false
 }

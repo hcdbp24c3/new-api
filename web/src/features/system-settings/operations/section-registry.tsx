@@ -141,7 +141,7 @@ const OPERATIONS_SECTIONS = [
   },
   {
     id: 'model-dev-sync',
-    titleKey: 'models.dev Sync',
+    titleKey: 'Metadata & Pricing Sync',
     build: (settings: OperationsSettings) => (
       <ModelDevSyncSettingsSection
         defaultValues={{

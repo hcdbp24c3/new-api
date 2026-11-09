@@ -1,6 +1,7 @@
 package geminichat
 
 import (
+	"encoding/base64"
 	"fmt"
 	"sort"
 	"strconv"
@@ -727,6 +728,15 @@ func geminiResponseToolCall(item *dto.GeminiPart) *dto.ToolCallResponse {
 	callID := strings.TrimSpace(item.FunctionCall.ID)
 	if callID == "" {
 		callID = fmt.Sprintf("call_%s", kitutil.GetUUID())
+	}
+	// Thought signature riding in tool call ID (inspired by Magpie):
+	// Preserves thought_signature through client turn so subsequent tool_result matches.
+	if len(item.ThoughtSignature) > 0 {
+		sig := string(item.ThoughtSignature)
+		sig = strings.Trim(sig, `"`)
+		if sig != "" {
+			callID = fmt.Sprintf("%s__ts__%s", callID, base64.RawURLEncoding.EncodeToString([]byte(sig)))
+		}
 	}
 	return &dto.ToolCallResponse{
 		ID:   callID,

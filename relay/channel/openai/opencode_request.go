@@ -51,7 +51,9 @@ func openCodeUpstreamProtocol(info *relaycommon.RelayInfo) string {
 // A base URL that still carries /v1 from an older configuration is trimmed, so
 // switching does not break a channel that is already set up.
 func openCodeAPIBase(baseURL string) string {
-	return strings.TrimSuffix(strings.TrimRight(baseURL, "/"), "/v1")
+	clean := strings.TrimRight(baseURL, "/")
+	clean = strings.TrimSuffix(clean, "/models")
+	return strings.TrimSuffix(clean, "/v1")
 }
 
 func prepareOpenCodeFreeTierRequest(info *relaycommon.RelayInfo, request *dto.GeneralOpenAIRequest) {
@@ -59,6 +61,11 @@ func prepareOpenCodeFreeTierRequest(info *relaycommon.RelayInfo, request *dto.Ge
 		return
 	}
 	if info.ChannelType != constant.ChannelTypeOpenCode {
+		return
+	}
+	// For authenticated requests (using a personal or opencode2api proxy key), do not force synthetic gate tools or forced streaming
+	isPublicAnonymous := info.ApiKey == "" || info.ApiKey == "public"
+	if !isPublicAnonymous {
 		return
 	}
 	switch openCodeUpstreamProtocol(info) {

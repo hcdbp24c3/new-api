@@ -671,6 +671,10 @@ export function OverviewDashboard() {
       </SectionPageLayout.Actions>
       <SectionPageLayout.Content>
         <div className='flex flex-col gap-4'>
+          <CardStaggerContainer>
+            <QuickActionsCard actions={visibleQuickActions} columns={2} />
+          </CardStaggerContainer>
+
           <div id={setupGuideId} hidden={!setupGuideExpanded}>
             {setupGuideExpanded && (
               <CardStaggerContainer className='grid items-stretch gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]'>
@@ -734,8 +738,6 @@ export function OverviewDashboard() {
                     </div>
                   </div>
                 </CardStaggerItem>
-
-                <QuickActionsCard actions={visibleQuickActions} columns={1} />
               </CardStaggerContainer>
             )}
           </div>
@@ -796,12 +798,6 @@ export function OverviewDashboard() {
           )}
 
           <SummaryCards />
-
-          {!setupGuideExpanded && (
-            <CardStaggerContainer>
-              <QuickActionsCard actions={visibleQuickActions} columns={2} />
-            </CardStaggerContainer>
-          )}
 
           {showContentPanels && (
             <CardStaggerContainer

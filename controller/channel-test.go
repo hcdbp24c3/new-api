@@ -47,8 +47,27 @@ func normalizeChannelTestEndpoint(channel *model.Channel, endpointType string) s
 	if normalized != "" {
 		return normalized
 	}
-	if channel != nil && channel.Type == constant.ChannelTypeCodex {
-		return string(constant.EndpointTypeOpenAIResponse)
+	if channel != nil {
+		other := channel.GetOtherSettings()
+		if other.UpstreamApiType == dto.ChannelApiTypeResponses ||
+			(other.UpstreamApiType == dto.ChannelApiTypeAuto && other.DetectedApiType == dto.ChannelApiTypeResponses) {
+			return string(constant.EndpointTypeOpenAIResponse)
+		}
+		if other.UpstreamApiType == dto.ChannelApiTypeChat ||
+			(other.UpstreamApiType == dto.ChannelApiTypeAuto && other.DetectedApiType == dto.ChannelApiTypeChat) {
+			return string(constant.EndpointTypeOpenAI)
+		}
+		if other.UpstreamApiType == dto.ChannelApiTypeAnthropic ||
+			(other.UpstreamApiType == dto.ChannelApiTypeAuto && other.DetectedApiType == dto.ChannelApiTypeAnthropic) {
+			return string(constant.EndpointTypeAnthropic)
+		}
+		if other.UpstreamApiType == dto.ChannelApiTypeGemini ||
+			(other.UpstreamApiType == dto.ChannelApiTypeAuto && other.DetectedApiType == dto.ChannelApiTypeGemini) {
+			return string(constant.EndpointTypeGemini)
+		}
+		if channel.Type == constant.ChannelTypeCodex {
+			return string(constant.EndpointTypeOpenAIResponse)
+		}
 	}
 	return normalized
 }
@@ -1018,6 +1037,43 @@ func TestChannel(c *gin.Context) {
 		c.JSON(http.StatusOK, resp)
 		return
 	}
+	if result.newAPIError != nil {
+		// If initial test failed with 404 or unsupported endpoint and endpointType was empty (auto),
+		// attempt to probe alternative endpoints (responses vs chat)
+		if endpointType == "" && (result.newAPIError.StatusCode == http.StatusNotFound || result.newAPIError.StatusCode == http.StatusBadRequest) {
+			other := channel.GetOtherSettings()
+			altEndpoint := string(constant.EndpointTypeOpenAIResponse)
+			if normalizeChannelTestEndpoint(channel, "") == string(constant.EndpointTypeOpenAIResponse) {
+				altEndpoint = string(constant.EndpointTypeOpenAI)
+			}
+			altResult := testChannel(requestCtx, channel, testUserID, testModel, altEndpoint, isStream)
+			if altResult.localErr == nil && altResult.newAPIError == nil {
+				result = altResult
+				if altEndpoint == string(constant.EndpointTypeOpenAIResponse) {
+					other.DetectedApiType = dto.ChannelApiTypeResponses
+				} else {
+					other.DetectedApiType = dto.ChannelApiTypeChat
+				}
+				channel.SetOtherSettings(other)
+				_ = model.DB.Model(channel).Update("settings", channel.OtherSettings).Error
+				model.CacheUpdateChannel(channel)
+			}
+		}
+	} else if endpointType == "" {
+		// Initial test succeeded with auto, record detected endpoint
+		other := channel.GetOtherSettings()
+		detected := dto.ChannelApiTypeChat
+		if normalizeChannelTestEndpoint(channel, "") == string(constant.EndpointTypeOpenAIResponse) {
+			detected = dto.ChannelApiTypeResponses
+		}
+		if other.DetectedApiType != detected {
+			other.DetectedApiType = detected
+			channel.SetOtherSettings(other)
+			_ = model.DB.Model(channel).Update("settings", channel.OtherSettings).Error
+			model.CacheUpdateChannel(channel)
+		}
+	}
+
 	tok := time.Now()
 	milliseconds := tok.Sub(tik).Milliseconds()
 	go channel.UpdateResponseTime(milliseconds)
@@ -1035,11 +1091,16 @@ func TestChannel(c *gin.Context) {
 		c.JSON(http.StatusOK, resp)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{
+	respSuccess := gin.H{
 		"success": true,
 		"message": "",
 		"time":    consumedTime,
-	})
+	}
+	other := channel.GetOtherSettings()
+	if other.DetectedApiType != "" {
+		respSuccess["detected_api_type"] = string(other.DetectedApiType)
+	}
+	c.JSON(http.StatusOK, respSuccess)
 }
 
 // channelTestSummary records the outcome of one channel test cycle so the

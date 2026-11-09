@@ -97,6 +97,36 @@ func OpenAIChatRequestToClaudeMessages(c context.Context, info convmeta.Meta, te
 		}
 	}
 
+	// Structured Outputs emulation for Claude:
+	// If response_format is json_schema or json_object and no explicit tool_choice was provided,
+	// emulate schema enforcement via a forced synthetic tool call.
+	if textRequest.ResponseFormat != nil && claudeRequest.ToolChoice == nil {
+		if textRequest.ResponseFormat.Type == "json_schema" && len(textRequest.ResponseFormat.JsonSchema) > 0 {
+			var schemaEnvelope struct {
+				Name        string         `json:"name"`
+				Description string         `json:"description"`
+				Schema      map[string]any `json:"schema"`
+			}
+			if err := kitutil.Unmarshal(textRequest.ResponseFormat.JsonSchema, &schemaEnvelope); err == nil && len(schemaEnvelope.Schema) > 0 {
+				toolName := schemaEnvelope.Name
+				if toolName == "" {
+					toolName = "structured_output"
+				}
+				schemaBytes, _ := kitutil.Marshal(schemaEnvelope.Schema)
+				claudeTools = append(claudeTools, &dto.Tool{
+					Name:        toolName,
+					Description: schemaEnvelope.Description,
+					InputSchema: schemaBytes,
+				})
+				claudeRequest.Tools = claudeTools
+				claudeRequest.ToolChoice = &dto.ClaudeToolChoice{
+					Type: "tool",
+					Name: toolName,
+				}
+			}
+		}
+	}
+
 	sourceReasoning, diagnostics, err := reasoning.FromOpenAIChat(&textRequest)
 	if err != nil {
 		return nil, reasoning.AsClientError(err)

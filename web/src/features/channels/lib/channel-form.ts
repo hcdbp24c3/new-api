@@ -283,6 +283,8 @@ export const channelFormSchema = z
     vertex_api_version: z.enum(['v1', 'v1beta1']).optional(), // Vertex AI Google model (Gemini, Imagen) path version
     aws_key_type: z.enum(['ak_sk', 'api_key']).optional(), // AWS specific
     aws_api_type: z.enum(['invoke_model', 'mantle']).optional(),
+    upstream_api_type: z.enum(['', 'chat', 'responses', 'anthropic', 'gemini']).optional(),
+    detected_api_type: z.enum(['', 'chat', 'responses', 'anthropic', 'gemini']).optional(),
     azure_responses_version: z.string().optional(), // Azure specific
     // Field passthrough controls (stored in settings JSON)
     allow_service_tier: z.boolean().optional(), // OpenAI/Anthropic
@@ -300,6 +302,7 @@ export const channelFormSchema = z
     upstream_model_update_ignored_models: z.string().optional(),
     // Per-channel model prefix (stored in settings JSON)
     model_prefix: z.string().optional(),
+    privacy_secret_masking: z.boolean().optional(),
     // Auto-update balance toggle
     auto_update_balance: z.boolean().optional(),
   })
@@ -484,6 +487,8 @@ export const CHANNEL_FORM_DEFAULT_VALUES: ChannelFormValues = {
   vertex_api_version: 'v1',
   aws_key_type: 'ak_sk',
   aws_api_type: 'invoke_model',
+  upstream_api_type: '',
+  detected_api_type: '',
   azure_responses_version: '',
   // Field passthrough controls
   allow_service_tier: false,
@@ -500,6 +505,7 @@ export const CHANNEL_FORM_DEFAULT_VALUES: ChannelFormValues = {
   upstream_model_update_ignored_models: '',
   advanced_custom: '',
   model_prefix: '',
+  privacy_secret_masking: false,
   auto_update_balance: false,
 }
 
@@ -565,6 +571,8 @@ export function transformChannelToFormDefaults(
   let isEnterpriseAccount = false
   let awsKeyType: 'ak_sk' | 'api_key' = 'ak_sk'
   let awsApiType: 'invoke_model' | 'mantle' = 'invoke_model'
+  let upstreamApiType: '' | 'chat' | 'responses' | 'anthropic' | 'gemini' = ''
+  let detectedApiType: '' | 'chat' | 'responses' | 'anthropic' | 'gemini' = ''
   let allowServiceTier = false
   let disableStore = false
   let allowSafetyIdentifier = false
@@ -579,6 +587,7 @@ export function transformChannelToFormDefaults(
   let upstreamModelUpdateIgnoredModels = ''
   let advancedCustom = ''
   let modelPrefix = ''
+  let privacySecretMasking = false
   let autoUpdateBalance = false
 
   if (channel.settings) {
@@ -592,6 +601,8 @@ export function transformChannelToFormDefaults(
       isEnterpriseAccount = parsed.openrouter_enterprise === true
       awsKeyType = parsed.aws_key_type || 'ak_sk'
       awsApiType = parsed.aws_api_type || 'invoke_model'
+      upstreamApiType = parsed.upstream_api_type || ''
+      detectedApiType = parsed.detected_api_type || ''
       allowServiceTier = parsed.allow_service_tier === true
       disableStore = parsed.disable_store === true
       allowSafetyIdentifier = parsed.allow_safety_identifier === true
@@ -614,6 +625,7 @@ export function transformChannelToFormDefaults(
         advancedCustom = stringifyAdvancedCustomConfig(parsed.advanced_custom)
       }
       modelPrefix = parsed.model_prefix || ''
+      privacySecretMasking = parsed.privacy_secret_masking === true
       autoUpdateBalance = parsed.auto_update_balance === true
     } catch (error) {
       // eslint-disable-next-line no-console
@@ -702,6 +714,8 @@ export function transformChannelToFormDefaults(
     azure_responses_version: azureResponsesVersion,
     aws_key_type: awsKeyType,
     aws_api_type: awsApiType,
+    upstream_api_type: upstreamApiType,
+    detected_api_type: detectedApiType,
     allow_service_tier: allowServiceTier,
     disable_store: disableStore,
     allow_include_obfuscation: allowIncludeObfuscation,
@@ -716,6 +730,7 @@ export function transformChannelToFormDefaults(
     upstream_model_update_ignored_models: upstreamModelUpdateIgnoredModels,
     advanced_custom: advancedCustom,
     model_prefix: modelPrefix,
+    privacy_secret_masking: privacySecretMasking,
     auto_update_balance: autoUpdateBalance,
   }
 }
@@ -819,6 +834,12 @@ function buildSettingsJSON(formData: ChannelFormValues): string {
     delete settingsObj.aws_api_type
   }
 
+  if (formData.upstream_api_type) {
+    settingsObj.upstream_api_type = formData.upstream_api_type
+  } else {
+    delete settingsObj.upstream_api_type
+  }
+
   // Field passthrough controls:
   // - OpenAI, Anthropic, Codex, and New API: allow_service_tier
   // - OpenAI request fields: OpenAI, Codex, and New API
@@ -903,6 +924,13 @@ function buildSettingsJSON(formData: ChannelFormValues): string {
     if (typeof settingsObj.upstream_model_update_last_check_time !== 'number') {
       settingsObj.upstream_model_update_last_check_time = 0
     }
+  }
+
+  // Privacy secret masking
+  if (formData.privacy_secret_masking) {
+    settingsObj.privacy_secret_masking = true
+  } else {
+    delete settingsObj.privacy_secret_masking
   }
 
   // Auto-update balance setting

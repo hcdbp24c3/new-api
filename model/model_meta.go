@@ -190,11 +190,13 @@ func GetConfiguredModelChannels() (map[string][]int, error) {
 	for _, channel := range channels {
 		prefix := ExtractModelPrefix(channel.OtherSettings)
 		for _, name := range normalizeLookupValues(channel.GetModels()) {
-			bare := name
+			configured[name] = append(configured[name], channel.Id)
 			if prefix != "" {
-				bare = strings.TrimPrefix(name, prefix+"/")
+				bare := strings.TrimPrefix(name, prefix+"/")
+				if bare != name {
+					configured[bare] = append(configured[bare], channel.Id)
+				}
 			}
-			configured[bare] = append(configured[bare], channel.Id)
 		}
 	}
 	return configured, nil

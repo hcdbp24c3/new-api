@@ -74,7 +74,7 @@ export function ModelDevSyncSettingsSection({
   }
 
   return (
-    <SettingsSection title={t('models.dev Sync')}>
+    <SettingsSection title={t('Metadata & Pricing Sync')}>
       <Form {...form}>
         <SettingsForm onSubmit={form.handleSubmit(onSubmit)}>
           <SettingsPageFormActions
@@ -87,10 +87,10 @@ export function ModelDevSyncSettingsSection({
             render={({ field }) => (
               <SettingsSwitchItem>
                 <SettingsSwitchContent>
-                  <FormLabel>{t('Enable auto sync')}</FormLabel>
+                  <FormLabel>{t('Enable periodic sync')}</FormLabel>
                   <FormDescription>
                     {t(
-                      'Enable automatic periodic sync from models.dev'
+                      'Enable automatic periodic sync for model metadata and pricing'
                     )}
                   </FormDescription>
                 </SettingsSwitchContent>
@@ -113,7 +113,7 @@ export function ModelDevSyncSettingsSection({
                   <FormLabel>{t('Sync Interval (hours)')}</FormLabel>
                   <FormDescription>
                     {t(
-                      'How often to sync from models.dev (1-168 hours)'
+                      'How often to automatically sync metadata and pricing (1-168 hours)'
                     )}
                   </FormDescription>
                 </SettingsSwitchContent>

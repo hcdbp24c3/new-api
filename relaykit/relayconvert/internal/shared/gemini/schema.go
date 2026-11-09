@@ -172,6 +172,23 @@ func sanitizeGeminiEnum(schema map[string]interface{}) {
 func normalizeGeminiSchemaTypeAndNullable(schema map[string]interface{}) {
 	rawType, ok := schema["type"]
 	if !ok || rawType == nil {
+		// Magpie-inspired inference: automatically assign required Schema type if omitted
+		if _, hasProps := schema["properties"]; hasProps {
+			schema["type"] = "OBJECT"
+			return
+		}
+		if _, hasItems := schema["items"]; hasItems {
+			schema["type"] = "ARRAY"
+			return
+		}
+		if _, hasEnum := schema["enum"]; hasEnum {
+			schema["type"] = "STRING"
+			return
+		}
+		// If node has no type declared and is inside an object schema, assign STRING as safe default
+		if len(schema) > 0 {
+			schema["type"] = "STRING"
+		}
 		return
 	}
 

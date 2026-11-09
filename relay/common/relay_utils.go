@@ -24,6 +24,15 @@ type HasImage interface {
 }
 
 func GetFullRequestURL(baseURL string, requestURL string, channelType int) string {
+	if channelType == constant.ChannelTypeVolcEngineAPI {
+		trimmedBase := strings.TrimRight(baseURL, "/")
+		trimmedPath := strings.TrimPrefix(requestURL, "/v1")
+		if !strings.HasPrefix(trimmedPath, "/") {
+			trimmedPath = "/" + trimmedPath
+		}
+		return fmt.Sprintf("%s%s", trimmedBase, trimmedPath)
+	}
+
 	fullRequestURL := fmt.Sprintf("%s%s", baseURL, requestURL)
 
 	if strings.HasPrefix(baseURL, "https://gateway.ai.cloudflare.com") {

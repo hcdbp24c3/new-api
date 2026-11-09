@@ -344,6 +344,12 @@ func OpenaiHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Respo
 		responseBody = geminiRespStr
 	}
 
+	if info.ChannelOtherSettings.PrivacySecretMasking {
+		if maskSession := helper.GetAndRemoveMaskSession(c.GetString(common.RequestIdKey)); maskSession != nil {
+			responseBody = []byte(maskSession.UnmaskSecrets(string(responseBody)))
+		}
+	}
+
 	service.IOCopyBytesGracefully(c, resp, responseBody)
 
 	return &simpleResponse.Usage, nil

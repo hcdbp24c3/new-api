@@ -109,8 +109,20 @@ const (
 	AwsApiTypeMantle      AwsApiType = "mantle"
 )
 
+type ChannelApiType string
+
+const (
+	ChannelApiTypeAuto        ChannelApiType = ""
+	ChannelApiTypeChat        ChannelApiType = "chat"
+	ChannelApiTypeResponses   ChannelApiType = "responses"
+	ChannelApiTypeAnthropic   ChannelApiType = "anthropic"
+	ChannelApiTypeGemini      ChannelApiType = "gemini"
+)
+
 type ChannelOtherSettings struct {
 	AzureResponsesVersion                 string                `json:"azure_responses_version,omitempty"`
+	UpstreamApiType                       ChannelApiType        `json:"upstream_api_type,omitempty"`
+	DetectedApiType                       ChannelApiType        `json:"detected_api_type,omitempty"`
 	VertexKeyType                         VertexKeyType         `json:"vertex_key_type,omitempty"`    // "json" or "api_key"
 	VertexProjectID                       string                `json:"vertex_project_id,omitempty"`  // 仅当 vertex_key_type=api_key 时使用；JSON 模式下从 service account 解析
 	VertexAPIVersion                      string                `json:"vertex_api_version,omitempty"` // Google 模型（Gemini、Imagen）请求路径版本："v1"（默认）或 "v1beta1"
@@ -141,6 +153,8 @@ type ChannelOtherSettings struct {
 	// rejection. Empty follows the default allow policy. Accepted values:
 	// "", "allow", "safe", "strict".
 	ToolLossPolicy string `json:"tool_loss_policy,omitempty"`
+	// PrivacySecretMasking enables Magpie-style secret and sensitive token masking in outbound requests
+	PrivacySecretMasking bool `json:"privacy_secret_masking,omitempty"`
 	// AutoUpdateBalance enables periodic automatic balance checking for this
 	// channel. The system-level CHANNEL_UPDATE_FREQUENCY env var must also be
 	// set for the background task to run.

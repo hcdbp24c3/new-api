@@ -96,6 +96,8 @@ export interface ChannelSettings {
 
 export interface ChannelOtherSettings {
   azure_responses_version?: string
+  upstream_api_type?: '' | 'chat' | 'responses' | 'anthropic' | 'gemini'
+  detected_api_type?: '' | 'chat' | 'responses' | 'anthropic' | 'gemini'
   vertex_key_type?: 'json' | 'api_key'
   vertex_project_id?: string
   vertex_api_version?: 'v1' | 'v1beta1'
@@ -119,6 +121,7 @@ export interface ChannelOtherSettings {
   advanced_custom?: AdvancedCustomConfig
   // Per-channel model prefix (stored in settings JSON)
   model_prefix?: string
+  privacy_secret_masking?: boolean
   // Auto-update balance toggle
   auto_update_balance?: boolean
   auto_update_balance_last_check_time?: number

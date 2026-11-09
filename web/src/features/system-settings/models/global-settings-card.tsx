@@ -55,27 +55,6 @@ const thinkingBlacklistExample = JSON.stringify(
   2
 )
 
-const chatToResponsesPolicyExample = JSON.stringify(
-  {
-    enabled: true,
-    all_channels: false,
-    channel_ids: [1, 2],
-    model_patterns: ['^gpt-4o.*$', '^gpt-5.*$'],
-  },
-  null,
-  2
-)
-
-const chatToResponsesPolicyAllChannelsExample = JSON.stringify(
-  {
-    enabled: true,
-    all_channels: true,
-    model_patterns: ['^gpt-4o.*$', '^gpt-5.*$'],
-  },
-  null,
-  2
-)
-
 const jsonString = z.string().refine((value) => {
   const trimmed = value.trim()
   if (!trimmed) return true
@@ -91,7 +70,6 @@ const schema = z.object({
   global: z.object({
     pass_through_request_enabled: z.boolean(),
     thinking_model_blacklist: jsonString,
-    chat_completions_to_responses_policy: jsonString,
   }),
   general_setting: z.object({
     ping_interval_enabled: z.boolean(),
@@ -105,7 +83,6 @@ type GlobalModelSettingsFormInput = z.input<typeof schema>
 type FlatGlobalModelSettings = {
   'global.pass_through_request_enabled': boolean
   'global.thinking_model_blacklist': string
-  'global.chat_completions_to_responses_policy': string
   'general_setting.ping_interval_enabled': boolean
   'general_setting.ping_interval_seconds': number
 }
@@ -118,10 +95,6 @@ const flattenGlobalValues = (
   'global.thinking_model_blacklist': normalizeJsonText(
     values.global.thinking_model_blacklist,
     '[]'
-  ),
-  'global.chat_completions_to_responses_policy': normalizeJsonText(
-    values.global.chat_completions_to_responses_policy,
-    '{}'
   ),
   'general_setting.ping_interval_enabled':
     values.general_setting.ping_interval_enabled,
@@ -237,84 +210,6 @@ export function GlobalSettingsCard({ defaultValues }: GlobalSettingsCardProps) {
               </FormItem>
             )}
           />
-
-          <Separator />
-
-          <div className='space-y-4'>
-            <div className='flex items-center gap-2'>
-              <h3 className='text-base font-semibold'>
-                {t('ChatCompletions -> Responses Compatibility')}
-              </h3>
-              <StatusBadge
-                label={t('Preview')}
-                variant='neutral'
-                copyable={false}
-              />
-            </div>
-
-            <Alert>
-              <AlertTitle>{t('Warning')}</AlertTitle>
-              <AlertDescription>
-                {t(
-                  'This feature is experimental. Configuration format and behavior may change.'
-                )}
-              </AlertDescription>
-            </Alert>
-
-            <FormField
-              control={form.control}
-              name='global.chat_completions_to_responses_policy'
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t('Policy JSON')}</FormLabel>
-                  <FormControl>
-                    <JsonCodeEditor
-                      value={field.value}
-                      onChange={(value) => field.onChange(value)}
-                      name={field.name}
-                      onBlur={field.onBlur}
-                      textareaRef={field.ref}
-                      placeholder={`${t('Example (specific channels):')}\n${chatToResponsesPolicyExample}\n\n${t('Example (all channels):')}\n${chatToResponsesPolicyAllChannelsExample}`}
-                    />
-                  </FormControl>
-                  <FormDescription>
-                    {t('Empty value will be saved as {}.')}
-                  </FormDescription>
-                  <div className='flex flex-wrap gap-2'>
-                    <Button
-                      type='button'
-                      variant='outline'
-                      size='sm'
-                      onClick={() =>
-                        form.setValue(
-                          'global.chat_completions_to_responses_policy',
-                          chatToResponsesPolicyExample,
-                          { shouldDirty: true }
-                        )
-                      }
-                    >
-                      {t('Fill example (specific channels)')}
-                    </Button>
-                    <Button
-                      type='button'
-                      variant='outline'
-                      size='sm'
-                      onClick={() =>
-                        form.setValue(
-                          'global.chat_completions_to_responses_policy',
-                          chatToResponsesPolicyAllChannelsExample,
-                          { shouldDirty: true }
-                        )
-                      }
-                    >
-                      {t('Fill example (all channels)')}
-                    </Button>
-                  </div>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </div>
 
           <Separator />
 

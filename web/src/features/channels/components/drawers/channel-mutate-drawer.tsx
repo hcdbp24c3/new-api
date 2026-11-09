@@ -307,6 +307,8 @@ const SENSITIVE_FORM_FIELDS = [
   'vertex_api_version',
   'aws_key_type',
   'aws_api_type',
+  'upstream_api_type',
+  'detected_api_type',
   'azure_responses_version',
   'force_format',
   'thinking_to_content',
@@ -326,6 +328,7 @@ const SENSITIVE_FORM_FIELDS = [
   'allow_speed',
   'claude_beta_query',
   'ollama_openai_chat',
+  'privacy_secret_masking',
   'disable_task_polling_sleep',
   'auto_update_balance',
   'upstream_model_update_check_enabled',
@@ -2089,6 +2092,30 @@ export function ChannelMutateDrawer({
     />
   )
 
+  const privacySecretMaskingFields = (
+    <FormField
+      control={form.control}
+      name='privacy_secret_masking'
+      render={({ field }) => (
+        <FormItem className='flex items-center justify-between px-4 py-3'>
+          <div className='space-y-0.5'>
+            <FormLabel>{t('Privacy & Secret Masking')}</FormLabel>
+            <FormDescription>
+              {t('Mask API keys, passwords, and tokens before sending to upstream and restore in response')}
+            </FormDescription>
+          </div>
+          <FormControl>
+            <Switch
+              disabled={sensitiveLocked}
+              checked={field.value}
+              onCheckedChange={field.onChange}
+            />
+          </FormControl>
+        </FormItem>
+      )}
+    />
+  )
+
   const autoUpdateBalanceFields = (
     <FormField
       control={form.control}
@@ -2134,6 +2161,55 @@ export function ChannelMutateDrawer({
               onCheckedChange={field.onChange}
             />
           </FormControl>
+        </FormItem>
+      )}
+    />
+  )
+
+  const upstreamApiTypeFields = (currentType === 1 || currentType === 8 || currentType === 60) && (
+    <FormField
+      control={form.control}
+      name='upstream_api_type'
+      render={({ field }) => (
+        <FormItem className='space-y-2 px-4 py-3'>
+          <div className='flex items-center justify-between'>
+            <FormLabel>{t('Upstream API Protocol')}</FormLabel>
+            {form.watch('detected_api_type') && (
+              <span className='text-muted-foreground text-xs font-mono'>
+                {t('Detected')}: {form.watch('detected_api_type')}
+              </span>
+            )}
+          </div>
+          <Select
+            disabled={sensitiveLocked}
+            items={[
+              { value: '', label: t('Auto detect (default)') },
+              { value: 'chat', label: t('OpenAI Chat (/v1/chat/completions)') },
+              { value: 'responses', label: t('OpenAI Responses (/v1/responses)') },
+              { value: 'anthropic', label: t('Anthropic (/v1/messages)') },
+              { value: 'gemini', label: t('Gemini (/v1beta/models)') },
+            ]}
+            onValueChange={field.onChange}
+            value={field.value ?? ''}
+          >
+            <FormControl>
+              <SelectTrigger>
+                <SelectValue placeholder={t('Auto detect (default)')} />
+              </SelectTrigger>
+            </FormControl>
+            <SelectContent alignItemWithTrigger={false}>
+              <SelectGroup>
+                <SelectItem value=''>{t('Auto detect (default)')}</SelectItem>
+                <SelectItem value='chat'>{t('OpenAI Chat (/v1/chat/completions)')}</SelectItem>
+                <SelectItem value='responses'>{t('OpenAI Responses (/v1/responses)')}</SelectItem>
+                <SelectItem value='anthropic'>{t('Anthropic (/v1/messages)')}</SelectItem>
+                <SelectItem value='gemini'>{t('Gemini (/v1beta/models)')}</SelectItem>
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+          <FormDescription>
+            {t('Explicitly select upstream API protocol or let New API automatically probe and detect.')}
+          </FormDescription>
         </FormItem>
       )}
     />
@@ -5065,8 +5141,10 @@ export function ChannelMutateDrawer({
                   channelType={currentType}
                   disabled={sensitiveLocked || isSubmitting}
                 />
+                {upstreamApiTypeFields}
                 {formatFields}
                 {ollamaOpenAIChatFields}
+                {privacySecretMaskingFields}
                 {thinkingFields}
                 {passthroughFields}
                 {systemPromptFields}

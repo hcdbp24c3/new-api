@@ -48,10 +48,6 @@ const MODELS_SECTIONS = [
               settings['global.thinking_model_blacklist'],
               '[]'
             ),
-            chat_completions_to_responses_policy: formatJsonForEditor(
-              settings['global.chat_completions_to_responses_policy'],
-              '{}'
-            ),
           },
           general_setting: {
             ping_interval_enabled:

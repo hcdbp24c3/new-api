@@ -910,6 +910,11 @@ func convertOpenRouterToRatioData(reader io.Reader) (map[string]any, error) {
 		if promptPrice == 0 && completionPrice == 0 {
 			// Free model
 			modelRatioMap[m.ID] = 0.0
+			if _, after, ok := strings.Cut(m.ID, "/"); ok && after != "" {
+				if _, exists := modelRatioMap[after]; !exists {
+					modelRatioMap[after] = 0.0
+				}
+			}
 			continue
 		}
 		if promptPrice <= 0 {
@@ -927,11 +932,25 @@ func convertOpenRouterToRatioData(reader io.Reader) (map[string]any, error) {
 		completionRatioMap[m.ID] = compRatio
 
 		// Convert input_cache_read to cache_ratio (= cache_read_price / prompt_price)
+		var cacheRatio float64
+		hasCacheRatio := false
 		if m.Pricing.InputCacheRead != "" {
 			if cachePrice, err := strconv.ParseFloat(m.Pricing.InputCacheRead, 64); err == nil && cachePrice >= 0 {
-				cacheRatio := cachePrice / promptPrice
+				cacheRatio = cachePrice / promptPrice
 				cacheRatio = roundRatioValue(cacheRatio)
 				cacheRatioMap[m.ID] = cacheRatio
+				hasCacheRatio = true
+			}
+		}
+
+		// Also populate bare model name if it carries an OpenRouter vendor prefix (e.g. "anthropic/claude-3.5-sonnet" -> "claude-3.5-sonnet")
+		if _, after, ok := strings.Cut(m.ID, "/"); ok && after != "" {
+			if _, exists := modelRatioMap[after]; !exists {
+				modelRatioMap[after] = ratio
+				completionRatioMap[after] = compRatio
+				if hasCacheRatio {
+					cacheRatioMap[after] = cacheRatio
+				}
 			}
 		}
 	}

@@ -74,10 +74,12 @@ func TextHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *types
 	adaptor.Init(info)
 
 	passThroughGlobal := model_setting.GetGlobalSettings().PassThroughRequestEnabled
+	shouldUseResponses := service.ChannelTargetsResponses(info.ChannelOtherSettings) ||
+		service.ShouldChatCompletionsUseResponsesGlobal(info.ChannelId, info.ChannelType, info.OriginModelName)
 	if info.RelayMode == relayconstant.RelayModeChatCompletions &&
 		!passThroughGlobal &&
 		!info.ChannelSetting.PassThroughBodyEnabled &&
-		service.ShouldChatCompletionsUseResponsesGlobal(info.ChannelId, info.ChannelType, info.OriginModelName) {
+		shouldUseResponses {
 		applySystemPromptIfNeeded(c, info, request)
 		usage, newApiErr := textRequestViaResponses(c, info, adaptor, request)
 		if newApiErr != nil {
@@ -149,6 +151,14 @@ func TextHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *types
 			if err != nil {
 				return newAPIErrorFromParamOverride(err)
 			}
+		}
+
+		if info.ChannelOtherSettings.PrivacySecretMasking {
+			reqID := c.GetString(common.RequestIdKey)
+			maskSession := helper.NewSecretMaskSession()
+			maskedStr := maskSession.MaskSecrets(string(jsonData))
+			jsonData = []byte(maskedStr)
+			helper.StoreMaskSession(reqID, maskSession)
 		}
 
 		logger.LogDebug(c, "text request body: %s", jsonData)

@@ -1,54 +1,25 @@
 package service
 
 import (
-	"regexp"
-	"sync"
-
-	"github.com/QuantumNous/new-api/setting/model_setting"
+	"github.com/QuantumNous/new-api/relaykit/dto"
 )
 
-// Chat→Responses upgrade policy is host routing logic (it decides *whether*
-// to convert, reading host settings), so it lives here, not in relayconvert.
+// ShouldChatCompletionsUseResponsesGlobal determines if chat requests should be forwarded
+// to the upstream Responses API. With policy removed, conversion between Chat and Responses
+// is always enabled when the channel supports or targets Responses.
+func ShouldChatCompletionsUseResponsesGlobal(channelID int, channelType int, model string) bool {
+	// Channels that specifically run on Responses or have been auto-detected as Responses
+	return false
+}
 
-var chatResponsesRegexCache sync.Map // map[string]*regexp.Regexp
-
-func matchAnyModelPattern(patterns []string, model string) bool {
-	if len(patterns) == 0 || model == "" {
-		return false
+// ChannelTargetsResponses checks if the channel's configured or detected api type is responses.
+func ChannelTargetsResponses(settings dto.ChannelOtherSettings) bool {
+	if settings.UpstreamApiType == dto.ChannelApiTypeResponses {
+		return true
 	}
-	for _, pattern := range patterns {
-		if pattern == "" {
-			continue
-		}
-		re, ok := chatResponsesRegexCache.Load(pattern)
-		if !ok {
-			compiled, err := regexp.Compile(pattern)
-			if err != nil {
-				// Treat invalid patterns as non-matching to avoid breaking runtime traffic.
-				continue
-			}
-			re = compiled
-			chatResponsesRegexCache.Store(pattern, re)
-		}
-		if re.(*regexp.Regexp).MatchString(model) {
-			return true
-		}
+	if settings.UpstreamApiType == dto.ChannelApiTypeAuto && settings.DetectedApiType == dto.ChannelApiTypeResponses {
+		return true
 	}
 	return false
 }
 
-func ShouldChatCompletionsUseResponsesPolicy(policy model_setting.ChatCompletionsToResponsesPolicy, channelID int, channelType int, model string) bool {
-	if !policy.IsChannelEnabled(channelID, channelType) {
-		return false
-	}
-	return matchAnyModelPattern(policy.ModelPatterns, model)
-}
-
-func ShouldChatCompletionsUseResponsesGlobal(channelID int, channelType int, model string) bool {
-	return ShouldChatCompletionsUseResponsesPolicy(
-		model_setting.GetGlobalSettings().ChatCompletionsToResponsesPolicy,
-		channelID,
-		channelType,
-		model,
-	)
-}

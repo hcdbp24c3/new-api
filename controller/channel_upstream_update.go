@@ -475,8 +475,11 @@ func resolveFetchModelsRequest(channel *model.Channel, baseURL string) (string, 
 	case constant.ChannelTypeOpenCode:
 		// OpenCode serves its model list under /zen/v1 and /zen/go/v1 while the
 		// base URL is configured without the /v1 segment, like every other
-		// channel. A base URL that still carries it is normalized away.
-		url = fmt.Sprintf("%s/v1/models", strings.TrimSuffix(strings.TrimRight(baseURL, "/"), "/v1"))
+		// channel. A base URL that still carries /v1 or /models is normalized away.
+		cleanBase := strings.TrimRight(baseURL, "/")
+		cleanBase = strings.TrimSuffix(cleanBase, "/models")
+		cleanBase = strings.TrimSuffix(cleanBase, "/v1")
+		url = fmt.Sprintf("%s/v1/models", cleanBase)
 	case constant.ChannelTypeAli:
 		url = fmt.Sprintf("%s/compatible-mode/v1/models", baseURL)
 	case constant.ChannelTypeZhipu_v4:

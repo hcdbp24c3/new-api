@@ -145,6 +145,18 @@ func OpenCodeSSEToNonStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, 
 		msg.ReasoningContent = &rc
 	}
 	if len(toolCalls) > 0 {
+		// Map synthetic tool names back to client-declared tools when matching (inspired by opencode2api)
+		for i := range toolCalls {
+			switch strings.ToLower(toolCalls[i].Function.Name) {
+			case "shell":
+				for _, clientTool := range info.ChannelOtherSettings.UpstreamModelUpdateLastDetectedModels {
+					if strings.EqualFold(clientTool, "bash") {
+						toolCalls[i].Function.Name = "Bash"
+						break
+					}
+				}
+			}
+		}
 		msg.SetToolCalls(toolCalls)
 		for _, tc := range toolCalls {
 			if tc.Function.Name != "" {

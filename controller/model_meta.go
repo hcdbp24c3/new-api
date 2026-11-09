@@ -285,10 +285,13 @@ func enrichModels(models []*model.Model) error {
 		quotas := make(map[int]bool)
 		for _, connection := range connections {
 			name := connection.BareModel
-			if !metadata.MatchesName(name) {
+			if !metadata.MatchesName(name) && !metadata.MatchesName(connection.Model) {
 				continue
 			}
 			names[name] = true
+			if connection.Model != "" && connection.Model != name {
+				names[connection.Model] = true
+			}
 			groups[connection.Group] = true
 			channels[connection.ChannelId] = model.BoundChannel{Name: connection.ChannelName, Type: connection.ChannelType}
 			for _, endpoint := range model.GetModelSupportEndpointTypes(name) {
