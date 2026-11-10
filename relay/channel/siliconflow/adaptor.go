@@ -13,6 +13,7 @@ import (
 	"github.com/QuantumNous/new-api/relay/constant"
 	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/relaykit/types"
+	"github.com/QuantumNous/new-api/service"
 
 	"github.com/gin-gonic/gin"
 	"github.com/samber/lo"
@@ -69,6 +70,10 @@ func (a *Adaptor) GetRequestURL(info *relaycommon.RelayInfo) (string, error) {
 	if info.RelayMode == constant.RelayModeRerank {
 		return fmt.Sprintf("%s/v1/rerank", info.ChannelBaseUrl), nil
 	}
+	if (info.RelayMode == constant.RelayModeResponses || info.RelayMode == constant.RelayModeResponsesCompact) &&
+		service.ChannelTargetsChat(info.ChannelOtherSettings) {
+		return fmt.Sprintf("%s/v1/chat/completions", info.ChannelBaseUrl), nil
+	}
 	return relaycommon.GetFullRequestURL(info.ChannelBaseUrl, info.RequestURLPath, info.ChannelType), nil
 }
 
@@ -93,8 +98,8 @@ func (a *Adaptor) ConvertOpenAIRequest(c *gin.Context, info *relaycommon.RelayIn
 }
 
 func (a *Adaptor) ConvertOpenAIResponsesRequest(c *gin.Context, info *relaycommon.RelayInfo, request dto.OpenAIResponsesRequest) (any, error) {
-	// TODO implement me
-	return nil, errors.New("not implemented")
+	adaptor := openai.Adaptor{}
+	return adaptor.ConvertOpenAIResponsesRequest(c, info, request)
 }
 
 func (a *Adaptor) DoRequest(c *gin.Context, info *relaycommon.RelayInfo, requestBody io.Reader) (any, error) {

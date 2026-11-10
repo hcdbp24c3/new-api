@@ -2,14 +2,17 @@ package xiaomi
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 
 	"github.com/QuantumNous/new-api/relay/channel"
 	"github.com/QuantumNous/new-api/relay/channel/openai"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
+	relayconstant "github.com/QuantumNous/new-api/relay/constant"
 	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/relaykit/types"
+	"github.com/QuantumNous/new-api/service"
 
 	"github.com/gin-gonic/gin"
 )
@@ -39,6 +42,10 @@ func (a *Adaptor) Init(info *relaycommon.RelayInfo) {
 }
 
 func (a *Adaptor) GetRequestURL(info *relaycommon.RelayInfo) (string, error) {
+	if (info.RelayMode == relayconstant.RelayModeResponses || info.RelayMode == relayconstant.RelayModeResponsesCompact) &&
+		service.ChannelTargetsChat(info.ChannelOtherSettings) {
+		return fmt.Sprintf("%s/v1/chat/completions", info.ChannelBaseUrl), nil
+	}
 	return relaycommon.GetFullRequestURL(info.ChannelBaseUrl, info.RequestURLPath, info.ChannelType), nil
 }
 

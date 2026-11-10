@@ -34,6 +34,11 @@ func TestAdaptorInheritsNewAPIResponsesCompactSupport(t *testing.T) {
 		ChannelMeta: &relaycommon.ChannelMeta{
 			ChannelType:    constant.ChannelTypeSub2API,
 			ChannelBaseUrl: "https://sub2api.example",
+			// A responses-target Sub2API channel keeps the native compact
+			// passthrough; chat-target channels convert to chat completions.
+			ChannelOtherSettings: dto.ChannelOtherSettings{
+				SupportedApiProtocols: []string{"responses"},
+			},
 		},
 		RequestURLPath: "/v1/responses/compact",
 		RelayMode:      relayconstant.RelayModeResponsesCompact,
