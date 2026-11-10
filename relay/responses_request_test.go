@@ -53,6 +53,10 @@ func TestPrepareResponsesRequestDeepSeekEffectiveReasoning(t *testing.T) {
 			common.SetContextKey(c, constant.ContextKeyChannelType, constant.ChannelTypeDeepSeek)
 			common.SetContextKey(c, constant.ContextKeyChannelBaseUrl, endpoint)
 			common.SetContextKey(c, constant.ContextKeyChannelSetting, dto.ChannelSettings{PassThroughBodyEnabled: tc.passthrough})
+			// This suite validates the native DeepSeek Responses endpoint
+			// normalization (/beta/responses): pin the upstream to responses so
+			// the adaptor does not convert the request to chat completions.
+			common.SetContextKey(c, constant.ContextKeyChannelOtherSetting, dto.ChannelOtherSettings{UpstreamApiType: dto.ChannelApiTypeResponses})
 			if tc.override != "" {
 				ops := []any{map[string]any{"path": "reasoning.effort", "mode": "set", "value": tc.override}, map[string]any{"path": "vendor_extension", "mode": "set", "value": "preserved"}}
 				if tc.replaceInput {

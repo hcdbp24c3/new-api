@@ -2,6 +2,8 @@ package deepseek
 
 import (
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -13,6 +15,7 @@ import (
 	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/relaykit/types"
 	"github.com/QuantumNous/new-api/setting/model_setting"
+	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -39,7 +42,15 @@ func TestThinkingSuffixUpstreamFields(t *testing.T) {
 		{model: "deepseek-v4-pro-max", upstream: "deepseek-v4-pro-max"},
 	}
 	newInfo := func(model string) *relaycommon.RelayInfo {
-		return &relaycommon.RelayInfo{OriginModelName: model, ChannelMeta: &relaycommon.ChannelMeta{UpstreamModelName: model}}
+		// The thinking-suffix cases exercise the native Responses passthrough;
+		// pin the upstream to responses so the adaptor does not convert to chat.
+		return &relaycommon.RelayInfo{
+			OriginModelName: model,
+			ChannelMeta: &relaycommon.ChannelMeta{
+				UpstreamModelName:    model,
+				ChannelOtherSettings: dto.ChannelOtherSettings{UpstreamApiType: dto.ChannelApiTypeResponses},
+			},
+		}
 	}
 	for _, tt := range tests {
 		t.Run(tt.model, func(t *testing.T) {
@@ -193,7 +204,10 @@ func TestModelModifiersUpstreamFields(t *testing.T) {
 				info := &relaycommon.RelayInfo{
 					OriginModelName: tt.model,
 					RelayFormat:     format,
-					ChannelMeta:     &relaycommon.ChannelMeta{UpstreamModelName: tt.model},
+					ChannelMeta: &relaycommon.ChannelMeta{
+						UpstreamModelName:    tt.model,
+						ChannelOtherSettings: dto.ChannelOtherSettings{UpstreamApiType: dto.ChannelApiTypeResponses},
+					},
 				}
 				var sent []byte
 				switch format {
@@ -401,4 +415,78 @@ func BenchmarkResponsesReasoningReplay(b *testing.B) {
 			})
 		}
 	}
+}
+
+// A chat-tagged DeepSeek channel must convert incoming Responses requests to
+// chat completions (and route them to /v1/chat/completions) instead of
+// forwarding them unchanged to /beta/responses, which returned a blank
+// response. Regression for the DeepSeek blank-response bug.
+func TestConvertOpenAIResponsesRequestChatTarget(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	info := &relaycommon.RelayInfo{
+		OriginModelName: "deepseek/deepseek-flash",
+		RelayFormat:     types.RelayFormatOpenAIResponses,
+		RelayMode:       constant.RelayModeResponses,
+		ChannelMeta: &relaycommon.ChannelMeta{
+			ChannelBaseUrl:    "https://api.deepseek.com",
+			UpstreamModelName: "deepseek-flash",
+			ChannelOtherSettings: dto.ChannelOtherSettings{
+				SupportedApiProtocols: []string{"chat"},
+				DetectedApiType:       dto.ChannelApiTypeChat,
+			},
+		},
+	}
+	info.InitRequestConversionChain()
+
+	converted, err := (&Adaptor{}).ConvertOpenAIResponsesRequest(c, info, dto.OpenAIResponsesRequest{
+		Model: "deepseek-flash",
+		Input: []byte(`"hi"`),
+	})
+	require.NoError(t, err)
+	chatReq, ok := converted.(*dto.GeneralOpenAIRequest)
+	require.True(t, ok, "expected *dto.GeneralOpenAIRequest, got %T", converted)
+	require.Len(t, chatReq.Messages, 1)
+	assert.Equal(t, "hi", chatReq.Messages[0].StringContent())
+	assert.Equal(t, []types.RelayFormat{types.RelayFormatOpenAIResponses, types.RelayFormatOpenAI}, info.RequestConversionChain)
+
+	url, err := (&Adaptor{}).GetRequestURL(info)
+	require.NoError(t, err)
+	assert.Equal(t, "https://api.deepseek.com/v1/chat/completions", url)
+}
+
+// A responses-targeted DeepSeek channel keeps the native passthrough shape.
+func TestConvertOpenAIResponsesRequestResponsesTarget(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	info := &relaycommon.RelayInfo{
+		OriginModelName: "deepseek/deepseek-flash",
+		RelayFormat:     types.RelayFormatOpenAIResponses,
+		RelayMode:       constant.RelayModeResponses,
+		ChannelMeta: &relaycommon.ChannelMeta{
+			ChannelBaseUrl:    "https://api.deepseek.com",
+			UpstreamModelName: "deepseek-flash",
+			ChannelOtherSettings: dto.ChannelOtherSettings{
+				SupportedApiProtocols: []string{"responses"},
+			},
+		},
+	}
+
+	converted, err := (&Adaptor{}).ConvertOpenAIResponsesRequest(c, info, dto.OpenAIResponsesRequest{
+		Model: "deepseek-flash",
+		Input: []byte(`"hi"`),
+	})
+	require.NoError(t, err)
+	_, ok := converted.(dto.OpenAIResponsesRequest)
+	require.True(t, ok, "expected dto.OpenAIResponsesRequest, got %T", converted)
+
+	url, err := (&Adaptor{}).GetRequestURL(info)
+	require.NoError(t, err)
+	assert.Equal(t, "https://api.deepseek.com/responses", url)
 }

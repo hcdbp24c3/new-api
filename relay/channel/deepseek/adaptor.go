@@ -14,8 +14,10 @@ import (
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relay/constant"
 	"github.com/QuantumNous/new-api/relaykit/dto"
+	"github.com/QuantumNous/new-api/relaykit/relayconvert"
 	kitreasoning "github.com/QuantumNous/new-api/relaykit/relayconvert/reasoning"
 	"github.com/QuantumNous/new-api/relaykit/types"
+	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting/model_setting"
 	"github.com/QuantumNous/new-api/setting/reasoning"
 	"github.com/gin-gonic/gin"
@@ -85,6 +87,13 @@ func (a *Adaptor) GetRequestURL(info *relaycommon.RelayInfo) (string, error) {
 		case constant.RelayModeCompletions:
 			return fmt.Sprintf("%s/completions", fimBaseUrl), nil
 		case constant.RelayModeResponses:
+			// A chat-tagged channel (the normal DeepSeek setup: chat-only
+			// /v1/chat/completions upstream) must receive converted chat
+			// completions requests. Only channels that actually target the
+			// native Responses API go to /beta/responses.
+			if service.ChannelTargetsChat(info.ChannelOtherSettings) {
+				return fmt.Sprintf("%s/v1/chat/completions", info.ChannelBaseUrl), nil
+			}
 			return fmt.Sprintf("%s/responses", info.ChannelBaseUrl), nil
 		case constant.RelayModeToolsSearch:
 			return fmt.Sprintf("%s/v1/tools/search", info.ChannelBaseUrl), nil
@@ -197,7 +206,23 @@ func (a *Adaptor) ConvertEmbeddingRequest(c *gin.Context, info *relaycommon.Rela
 	return nil, errors.New("not implemented")
 }
 
-func (a *Adaptor) ConvertOpenAIResponsesRequest(_ *gin.Context, info *relaycommon.RelayInfo, request dto.OpenAIResponsesRequest) (any, error) {
+func (a *Adaptor) ConvertOpenAIResponsesRequest(c *gin.Context, info *relaycommon.RelayInfo, request dto.OpenAIResponsesRequest) (any, error) {
+	if info != nil && service.ChannelTargetsChat(info.ChannelOtherSettings) {
+		// The channel is chat-only (the normal DeepSeek setup): convert the
+		// incoming Responses request to chat completions the same way the
+		// OpenAI adaptor does, then apply DeepSeek's thinking/effort
+		// modifiers. Without this the request used to be forwarded unchanged
+		// to /beta/responses, which produced a blank response.
+		applyDeepSeekV4ResponsesThinkingSuffix(info, &request)
+		converted, convertErr := service.ConvertRequestByID(c, info, relayconvert.ConverterOpenAIResponsesToOpenAIChat, &request)
+		if convertErr != nil {
+			return nil, convertErr
+		}
+		if req, ok := converted.Value.(*dto.GeneralOpenAIRequest); ok {
+			return a.ConvertOpenAIRequest(c, info, req)
+		}
+		return converted.Value, nil
+	}
 	applyDeepSeekV4ResponsesThinkingSuffix(info, &request)
 	return request, nil
 }
