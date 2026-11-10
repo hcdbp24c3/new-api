@@ -10,6 +10,7 @@ import (
 
 	"github.com/QuantumNous/new-api/relay/channel"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
+	"github.com/QuantumNous/new-api/relay/constant"
 	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/relaykit/relayconvert"
 	"github.com/QuantumNous/new-api/relaykit/types"
@@ -74,6 +75,12 @@ func (a *Adaptor) Init(info *relaycommon.RelayInfo) {
 }
 
 func (a *Adaptor) GetRequestURL(info *relaycommon.RelayInfo) (string, error) {
+	// Multi-protocol pass-through: native Responses requests go to the
+	// upstream /v1/responses endpoint instead of Anthropic /v1/messages.
+	if info.RelayMode == constant.RelayModeResponses &&
+		service.ChannelNativelySupports(info.ChannelOtherSettings, types.RelayFormatOpenAIResponses) {
+		return fmt.Sprintf("%s/v1/responses", info.ChannelBaseUrl), nil
+	}
 	requestURL := fmt.Sprintf("%s/v1/messages", info.ChannelBaseUrl)
 	if !shouldAppendClaudeBetaQuery(info) {
 		return requestURL, nil
@@ -146,6 +153,11 @@ func (a *Adaptor) ConvertEmbeddingRequest(c *gin.Context, info *relaycommon.Rela
 }
 
 func (a *Adaptor) ConvertOpenAIResponsesRequest(c *gin.Context, info *relaycommon.RelayInfo, request dto.OpenAIResponsesRequest) (any, error) {
+	// Multi-protocol channels that natively serve the Responses API pass the
+	// request through unchanged; no Claude conversion is needed.
+	if info != nil && service.ChannelNativelySupports(info.ChannelOtherSettings, types.RelayFormatOpenAIResponses) {
+		return request, nil
+	}
 	result, err := service.ConvertRequest(c, info, types.RelayFormatClaude, &request)
 	if err != nil {
 		return nil, err
@@ -162,6 +174,12 @@ func (a *Adaptor) DoRequest(c *gin.Context, info *relaycommon.RelayInfo, request
 }
 
 func (a *Adaptor) DoResponse(c *gin.Context, resp *http.Response, info *relaycommon.RelayInfo) (usage any, err *types.NewAPIError) {
+	// Native Responses pass-through: consume the upstream Responses response
+	// unchanged instead of converting Claude→Responses.
+	if info.RelayMode == constant.RelayModeResponses &&
+		service.ChannelNativelySupports(info.ChannelOtherSettings, types.RelayFormatOpenAIResponses) {
+		return ClaudeNativeResponsesHandler(c, info, resp)
+	}
 	info.FinalRequestRelayFormat = types.RelayFormatClaude
 	if info.RelayFormat == types.RelayFormatOpenAIResponses && info.IsStream {
 		return ClaudeResponsesStreamHandler(c, resp, info)

@@ -138,6 +138,14 @@ func (a *Adaptor) GetRequestURL(info *relaycommon.RelayInfo) (string, error) {
 
 	version := model_setting.GetGeminiVersionSetting(info.UpstreamModelName)
 
+	// Multi-protocol pass-through: native Responses requests go to the
+	// upstream /v1/responses endpoint instead of the Gemini generateContent
+	// endpoint.
+	if info.RelayMode == constant.RelayModeResponses &&
+		service.ChannelNativelySupports(info.ChannelOtherSettings, types.RelayFormatOpenAIResponses) {
+		return fmt.Sprintf("%s/%s/responses", info.ChannelBaseUrl, version), nil
+	}
+
 	if strings.HasPrefix(info.UpstreamModelName, "imagen") {
 		return fmt.Sprintf("%s/%s/models/%s:predict", info.ChannelBaseUrl, version, info.UpstreamModelName), nil
 	}
@@ -242,6 +250,11 @@ func (a *Adaptor) ConvertEmbeddingRequest(c *gin.Context, info *relaycommon.Rela
 }
 
 func (a *Adaptor) ConvertOpenAIResponsesRequest(c *gin.Context, info *relaycommon.RelayInfo, request dto.OpenAIResponsesRequest) (any, error) {
+	// Multi-protocol channels that natively serve the Responses API pass the
+	// request through unchanged; no Gemini conversion is needed.
+	if info != nil && service.ChannelNativelySupports(info.ChannelOtherSettings, types.RelayFormatOpenAIResponses) {
+		return request, nil
+	}
 	result, err := service.ConvertRequest(c, info, types.RelayFormatGemini, &request)
 	if err != nil {
 		return nil, err
@@ -258,6 +271,15 @@ func (a *Adaptor) DoRequest(c *gin.Context, info *relaycommon.RelayInfo, request
 }
 
 func (a *Adaptor) DoResponse(c *gin.Context, resp *http.Response, info *relaycommon.RelayInfo) (usage any, err *types.NewAPIError) {
+	// Native Responses pass-through: consume the upstream Responses response
+	// unchanged instead of converting Gemini→Responses.
+	if info.RelayMode == constant.RelayModeResponses &&
+		service.ChannelNativelySupports(info.ChannelOtherSettings, types.RelayFormatOpenAIResponses) {
+		if info.IsStream {
+			return GeminiNativeResponsesStreamHandler(c, info, resp)
+		}
+		return GeminiNativeResponsesHandler(c, info, resp)
+	}
 	if info.RelayMode == constant.RelayModeResponses {
 		if info.IsStream {
 			return GeminiResponsesStreamHandler(c, info, resp)
