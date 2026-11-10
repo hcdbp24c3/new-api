@@ -2,6 +2,7 @@ package service
 
 import (
 	"github.com/QuantumNous/new-api/relaykit/dto"
+	"github.com/QuantumNous/new-api/relaykit/types"
 )
 
 // ShouldChatCompletionsUseResponsesGlobal determines if chat requests should be forwarded
@@ -67,4 +68,34 @@ func ChannelTargetsChat(settings dto.ChannelOtherSettings) bool {
 	}
 	// Default to chat if no other tags or settings are provided
 	return true
+}
+
+// RelayFormatProtocol returns the SupportedApiProtocols tag that matches an
+// incoming relay format, or "" when the format has no native protocol tag.
+// Multi-protocol channels (e.g. dc-ai gateways that natively serve chat,
+// responses, Anthropic and Gemini) use these tags to pass requests through in
+// the client's own protocol instead of converting them.
+func RelayFormatProtocol(format types.RelayFormat) string {
+	switch format {
+	case types.RelayFormatOpenAI:
+		return "chat"
+	case types.RelayFormatOpenAIResponses:
+		return "responses"
+	case types.RelayFormatClaude:
+		return "anthropic"
+	case types.RelayFormatGemini:
+		return "gemini"
+	default:
+		return ""
+	}
+}
+
+// ChannelNativelySupports reports whether the channel's protocol tags include
+// the protocol of the given incoming relay format.
+func ChannelNativelySupports(settings dto.ChannelOtherSettings, format types.RelayFormat) bool {
+	protocol := RelayFormatProtocol(format)
+	if protocol == "" {
+		return false
+	}
+	return ChannelSupportsProtocol(settings, protocol)
 }

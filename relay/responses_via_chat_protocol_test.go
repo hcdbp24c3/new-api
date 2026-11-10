@@ -187,3 +187,82 @@ func TestResponsesToChatStreamRoutesDeepSeekChannel(t *testing.T) {
 	require.Contains(t, got, "event: response.completed")
 	require.NotContains(t, got, "response.failed")
 }
+
+// A channel tagged as natively supporting the Responses API must pass the
+// /v1/responses request through to the upstream /v1/responses endpoint in its
+// own protocol, without converting it to chat completions.
+func TestResponsesNativePassthroughForNativeResponsesTag(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	oldTimeout := constant.StreamingTimeout
+	constant.StreamingTimeout = 30
+	t.Cleanup(func() { constant.StreamingTimeout = oldTimeout })
+
+	upstreamBody := strings.Join([]string{
+		`data: {"type":"response.created","response":{"id":"resp_1","object":"response","status":"in_progress","model":"gemini-3.8-flash"}}`,
+		`data: {"type":"response.output_text.delta","output_index":0,"item_id":"msg_1","delta":"hello native"}`,
+		`data: {"type":"response.completed","response":{"id":"resp_1","object":"response","status":"completed","model":"gemini-3.8-flash","output":[{"type":"message","id":"msg_1","role":"assistant","content":[{"type":"output_text","text":"hello native"}]}],"usage":{"input_tokens":3,"output_tokens":2,"total_tokens":5}}}`,
+		`data: [DONE]`,
+		``,
+	}, "\n")
+
+	type capturedRequest struct {
+		path string
+		body []byte
+	}
+	captured := make(chan capturedRequest, 1)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		captured <- capturedRequest{path: r.URL.Path, body: body}
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = w.Write([]byte(upstreamBody))
+	}))
+	defer server.Close()
+
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+	c.Request.Header.Set("Content-Type", "application/json")
+	common.SetContextKey(c, constant.ContextKeyOriginalModel, "dc-ai/gemini-3.8-flash")
+	common.SetContextKey(c, constant.ContextKeyChannelType, constant.ChannelTypeOpenAI)
+	common.SetContextKey(c, constant.ContextKeyChannelBaseUrl, server.URL)
+	common.SetContextKey(c, constant.ContextKeyChannelKey, "test-key")
+	common.SetContextKey(c, constant.ContextKeyChannelOtherSetting, dto.ChannelOtherSettings{
+		SupportedApiProtocols: []string{"chat", "responses"},
+	})
+
+	stream := true
+	request := &dto.OpenAIResponsesRequest{Model: "dc-ai/gemini-3.8-flash", Input: []byte(`"hi"`), Stream: &stream}
+	info := relaycommon.GenRelayInfoResponses(c, request)
+	adaptor, body, closer, apiErr := PrepareResponsesRequest(c, info, request)
+	require.Nil(t, apiErr)
+	defer closer.Close()
+
+	response, err := adaptor.DoRequest(c, info, body)
+	require.NoError(t, err)
+	httpResponse, ok := response.(*http.Response)
+	require.True(t, ok)
+	usage, apiErr := adaptor.DoResponse(c, httpResponse, info)
+	require.Nil(t, apiErr)
+	require.IsType(t, &dto.Usage{}, usage)
+	require.Equal(t, 5, usage.(*dto.Usage).TotalTokens)
+
+	upstream := <-captured
+	assert.Equal(t, "/v1/responses", upstream.path)
+	// The wire body must remain a Responses request: no messages field.
+	var wire map[string]any
+	require.NoError(t, common.Unmarshal(upstream.body, &wire))
+	assert.NotContains(t, wire, "messages")
+	assert.Equal(t, []relaytypes.RelayFormat{relaytypes.RelayFormatOpenAIResponses}, info.RequestConversionChain)
+
+	got := recorder.Body.String()
+	require.Contains(t, got, "event: response.created")
+	require.Contains(t, got, "event: response.output_text.delta")
+	require.Contains(t, got, `"delta":"hello native"`)
+	require.Contains(t, got, "event: response.completed")
+	require.NotContains(t, got, "response.failed")
+}

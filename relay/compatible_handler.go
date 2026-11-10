@@ -74,8 +74,12 @@ func TextHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *types
 	adaptor.Init(info)
 
 	passThroughGlobal := model_setting.GetGlobalSettings().PassThroughRequestEnabled
-	shouldUseResponses := service.ChannelTargetsResponses(info.ChannelOtherSettings) ||
-		service.ShouldChatCompletionsUseResponsesGlobal(info.ChannelId, info.ChannelType, info.OriginModelName)
+	// Multi-protocol channels that natively serve chat completions pass the
+	// chat request through in its own protocol; only channels without native
+	// chat support consider the Responses conversion path.
+	shouldUseResponses := !service.ChannelNativelySupports(info.ChannelOtherSettings, types.RelayFormatOpenAI) &&
+		(service.ChannelTargetsResponses(info.ChannelOtherSettings) ||
+			service.ShouldChatCompletionsUseResponsesGlobal(info.ChannelId, info.ChannelType, info.OriginModelName))
 	if info.RelayMode == relayconstant.RelayModeChatCompletions &&
 		!passThroughGlobal &&
 		!info.ChannelSetting.PassThroughBodyEnabled &&

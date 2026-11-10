@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/QuantumNous/new-api/relaykit/dto"
+	"github.com/QuantumNous/new-api/relaykit/types"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -91,4 +92,25 @@ func TestChannelSupportsProtocol(t *testing.T) {
 	assert.True(t, ChannelSupportsProtocol(dto.ChannelOtherSettings{SupportedApiProtocols: []string{"chat", "responses"}}, "chat"))
 	assert.False(t, ChannelSupportsProtocol(dto.ChannelOtherSettings{SupportedApiProtocols: []string{"responses"}}, "chat"))
 	assert.False(t, ChannelSupportsProtocol(dto.ChannelOtherSettings{}, "chat"))
+}
+
+func TestRelayFormatProtocolMapping(t *testing.T) {
+	assert.Equal(t, "chat", RelayFormatProtocol(types.RelayFormatOpenAI))
+	assert.Equal(t, "responses", RelayFormatProtocol(types.RelayFormatOpenAIResponses))
+	assert.Equal(t, "anthropic", RelayFormatProtocol(types.RelayFormatClaude))
+	assert.Equal(t, "gemini", RelayFormatProtocol(types.RelayFormatGemini))
+	assert.Empty(t, RelayFormatProtocol(types.RelayFormatEmbedding))
+}
+
+func TestChannelNativelySupports(t *testing.T) {
+	full := dto.ChannelOtherSettings{SupportedApiProtocols: []string{"chat", "responses", "anthropic", "gemini"}}
+	assert.True(t, ChannelNativelySupports(full, types.RelayFormatOpenAIResponses))
+	assert.True(t, ChannelNativelySupports(full, types.RelayFormatClaude))
+	assert.True(t, ChannelNativelySupports(full, types.RelayFormatGemini))
+	assert.True(t, ChannelNativelySupports(full, types.RelayFormatOpenAI))
+
+	chatOnly := dto.ChannelOtherSettings{SupportedApiProtocols: []string{"chat"}}
+	assert.False(t, ChannelNativelySupports(chatOnly, types.RelayFormatOpenAIResponses))
+	assert.False(t, ChannelNativelySupports(chatOnly, types.RelayFormatClaude))
+	assert.True(t, ChannelNativelySupports(chatOnly, types.RelayFormatOpenAI))
 }

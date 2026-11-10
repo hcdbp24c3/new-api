@@ -73,8 +73,12 @@ func ClaudeHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *typ
 		}
 	}
 
-	shouldUseResponses := service.ChannelTargetsResponses(info.ChannelOtherSettings) ||
-		service.ShouldChatCompletionsUseResponsesGlobal(info.ChannelId, info.ChannelType, info.OriginModelName)
+	// Multi-protocol channels that natively serve Anthropic Messages pass the
+	// /v1/messages request through in its own protocol; only channels without
+	// native Anthropic support consider the Responses conversion path.
+	shouldUseResponses := !service.ChannelNativelySupports(info.ChannelOtherSettings, types.RelayFormatClaude) &&
+		(service.ChannelTargetsResponses(info.ChannelOtherSettings) ||
+			service.ShouldChatCompletionsUseResponsesGlobal(info.ChannelId, info.ChannelType, info.OriginModelName))
 	if !model_setting.GetGlobalSettings().PassThroughRequestEnabled &&
 		!info.ChannelSetting.PassThroughBodyEnabled &&
 		shouldUseResponses {

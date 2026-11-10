@@ -48,6 +48,11 @@ type Adaptor struct {
 }
 
 func (a *Adaptor) ConvertGeminiRequest(c *gin.Context, info *relaycommon.RelayInfo, request *dto.GeminiChatRequest) (any, error) {
+	// Multi-protocol channels that natively serve Gemini pass the request
+	// through in its own protocol instead of converting to chat.
+	if info != nil && service.ChannelNativelySupports(info.ChannelOtherSettings, types.RelayFormatGemini) {
+		return request, nil
+	}
 	result, err := service.ConvertRequest(c, info, types.RelayFormatOpenAI, request)
 	if err != nil {
 		return nil, err
@@ -65,6 +70,11 @@ func (a *Adaptor) ConvertGeminiRequest(c *gin.Context, info *relaycommon.RelayIn
 }
 
 func (a *Adaptor) ConvertClaudeRequest(c *gin.Context, info *relaycommon.RelayInfo, request *dto.ClaudeRequest) (any, error) {
+	// Multi-protocol channels that natively serve Anthropic Messages pass the
+	// request through in its own protocol instead of converting to chat.
+	if info != nil && service.ChannelNativelySupports(info.ChannelOtherSettings, types.RelayFormatClaude) {
+		return request, nil
+	}
 	//if !strings.Contains(request.Model, "claude") {
 	//	return nil, fmt.Errorf("you are using openai channel type with path /v1/messages, only claude model supported convert, but got %s", request.Model)
 	//}
@@ -208,6 +218,21 @@ func (a *Adaptor) GetRequestURL(info *relaycommon.RelayInfo) (string, error) {
 			return fmt.Sprintf("%s/v1/chat/completions", base), nil
 		}
 	default:
+		// Multi-protocol pass-through: when the channel's protocol tags
+		// include the incoming format, route to that format's native upstream
+		// endpoint instead of converting to chat completions.
+		if service.ChannelNativelySupports(info.ChannelOtherSettings, info.RelayFormat) {
+			switch info.RelayFormat {
+			case types.RelayFormatOpenAIResponses:
+				return fmt.Sprintf("%s/v1/responses", info.ChannelBaseUrl), nil
+			case types.RelayFormatClaude:
+				return fmt.Sprintf("%s/v1/messages", info.ChannelBaseUrl), nil
+			case types.RelayFormatGemini:
+				return fmt.Sprintf("%s/v1beta/models/%s:generateContent", info.ChannelBaseUrl, info.UpstreamModelName), nil
+			case types.RelayFormatOpenAI:
+				return fmt.Sprintf("%s/v1/chat/completions", info.ChannelBaseUrl), nil
+			}
+		}
 		if (info.RelayFormat == types.RelayFormatClaude || info.RelayFormat == types.RelayFormatGemini) &&
 			info.RelayMode != relayconstant.RelayModeResponses &&
 			info.RelayMode != relayconstant.RelayModeResponsesCompact {
@@ -749,6 +774,11 @@ func detectImageMimeType(filename string) string {
 }
 
 func (a *Adaptor) ConvertOpenAIResponsesRequest(c *gin.Context, info *relaycommon.RelayInfo, request dto.OpenAIResponsesRequest) (any, error) {
+	// Multi-protocol channels that natively serve the Responses API pass the
+	// request through unchanged; no chat conversion is needed.
+	if info != nil && service.ChannelNativelySupports(info.ChannelOtherSettings, types.RelayFormatOpenAIResponses) {
+		return request, nil
+	}
 	if info != nil && service.ChannelTargetsChat(info.ChannelOtherSettings) {
 		converted, convertErr := service.ConvertRequestByID(c, info, relayconvert.ConverterOpenAIResponsesToOpenAIChat, &request)
 		if convertErr != nil {
@@ -861,6 +891,18 @@ func (a *Adaptor) DoResponse(c *gin.Context, resp *http.Response, info *relaycom
 	case relayconstant.RelayModeRerank:
 		usage, err = common_handler.RerankHandler(c, info, resp)
 	case relayconstant.RelayModeResponses:
+		// Native Responses support wins: a multi-protocol channel tagged with
+		// "responses" passed the request through unchanged and must consume the
+		// native Responses response. Chat conversion applies only when the
+		// channel targets chat without native Responses support.
+		if service.ChannelNativelySupports(info.ChannelOtherSettings, types.RelayFormatOpenAIResponses) {
+			if info.IsStream {
+				usage, err = OaiResponsesStreamHandler(c, info, resp)
+			} else {
+				usage, err = OaiResponsesHandler(c, info, resp)
+			}
+			return
+		}
 		if service.ChannelTargetsChat(info.ChannelOtherSettings) {
 			if info.IsStream {
 				usage, err = OaiChatToResponsesStreamHandler(c, info, resp)

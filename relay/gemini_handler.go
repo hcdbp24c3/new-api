@@ -88,8 +88,12 @@ func GeminiHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *typ
 		}
 	}
 
+	// Multi-protocol channels that natively serve Gemini pass the request
+	// through in its own protocol; only channels without native Gemini support
+	// consider the Responses conversion path.
 	if !model_setting.GetGlobalSettings().PassThroughRequestEnabled &&
 		!info.ChannelSetting.PassThroughBodyEnabled &&
+		!service.ChannelNativelySupports(info.ChannelOtherSettings, types.RelayFormatGemini) &&
 		service.ChannelTargetsResponses(info.ChannelOtherSettings) {
 		usage, newApiErr := textRequestViaResponses(c, info, adaptor, request)
 		if newApiErr != nil {
