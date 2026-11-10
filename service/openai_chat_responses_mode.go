@@ -24,14 +24,19 @@ func ChannelSupportsProtocol(settings dto.ChannelOtherSettings, protocol string)
 
 // ChannelTargetsResponses checks if the channel's configured, detected, or tagged api type is responses.
 func ChannelTargetsResponses(settings dto.ChannelOtherSettings) bool {
+	// Protocol tags are the authoritative record of what the upstream actually
+	// supports. When any tag is present, auto-detection must not override it:
+	// a chat-tagged channel (DeepSeek, most OpenAI-compatible providers) must
+	// never be routed through the Responses protocol just because an earlier
+	// probe persisted DetectedApiType "responses".
+	if len(settings.SupportedApiProtocols) > 0 {
+		return ChannelSupportsProtocol(settings, "responses")
+	}
 	if settings.UpstreamApiType == dto.ChannelApiTypeResponses {
 		return true
 	}
 	if settings.UpstreamApiType == dto.ChannelApiTypeChat {
 		return false
-	}
-	if ChannelSupportsProtocol(settings, "responses") {
-		return true
 	}
 	if settings.DetectedApiType == dto.ChannelApiTypeResponses {
 		return true
@@ -41,14 +46,18 @@ func ChannelTargetsResponses(settings dto.ChannelOtherSettings) bool {
 
 // ChannelTargetsChat checks if the channel's configured, detected, or tagged api type is chat.
 func ChannelTargetsChat(settings dto.ChannelOtherSettings) bool {
+	// The explicit protocol tag wins over auto-detection: a chat-tagged
+	// channel (DeepSeek, most OpenAI-compatible providers) converts incoming
+	// Responses requests to chat completions even when DetectedApiType was
+	// persisted as "responses" by an earlier probe.
+	if len(settings.SupportedApiProtocols) > 0 {
+		return ChannelSupportsProtocol(settings, "chat")
+	}
 	if settings.UpstreamApiType == dto.ChannelApiTypeChat {
 		return true
 	}
 	if settings.UpstreamApiType == dto.ChannelApiTypeResponses {
 		return false
-	}
-	if ChannelSupportsProtocol(settings, "chat") {
-		return true
 	}
 	if settings.DetectedApiType == dto.ChannelApiTypeChat {
 		return true
@@ -59,5 +68,3 @@ func ChannelTargetsChat(settings dto.ChannelOtherSettings) bool {
 	// Default to chat if no other tags or settings are provided
 	return true
 }
-
-

@@ -49,6 +49,15 @@ func normalizeChannelTestEndpoint(channel *model.Channel, endpointType string) s
 	}
 	if channel != nil {
 		other := channel.GetOtherSettings()
+		// Protocol tags are the authoritative record of what the upstream
+		// supports; they win over a stale auto-detected api type when the
+		// probe endpoint is chosen.
+		if service.ChannelSupportsProtocol(other, "responses") {
+			return string(constant.EndpointTypeOpenAIResponse)
+		}
+		if service.ChannelSupportsProtocol(other, "chat") {
+			return string(constant.EndpointTypeOpenAI)
+		}
 		if other.UpstreamApiType == dto.ChannelApiTypeResponses ||
 			(other.UpstreamApiType == dto.ChannelApiTypeAuto && other.DetectedApiType == dto.ChannelApiTypeResponses) {
 			return string(constant.EndpointTypeOpenAIResponse)
@@ -1071,7 +1080,7 @@ func TestChannel(c *gin.Context) {
 		} else {
 			other.SupportedApiProtocols = []string{"chat"}
 		}
-		if other.DetectedApiType != detected || len(other.SupportedApiProtocols) > 0 {
+		if other.DetectedApiType != detected {
 			other.DetectedApiType = detected
 			channel.SetOtherSettings(other)
 			_ = model.DB.Model(channel).Update("settings", channel.OtherSettings).Error
