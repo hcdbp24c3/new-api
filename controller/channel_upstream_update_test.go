@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
@@ -14,6 +15,7 @@ import (
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/gin-gonic/gin"
+	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -346,10 +348,11 @@ func TestFailedAdvancedCustomDetectionDoesNotStageFullRemoval(t *testing.T) {
 	channel.SetOtherSettings(settings)
 	require.NoError(t, db.Create(channel).Error)
 
-	modelsChanged, autoAdded, err := checkAndPersistChannelUpstreamModelUpdates(channel, &settings, true, true)
+	modelsChanged, autoAdded, autoRemoved, err := checkAndPersistChannelUpstreamModelUpdates(channel, &settings, true, true)
 	require.ErrorContains(t, err, "no valid model IDs")
 	require.False(t, modelsChanged)
 	require.Zero(t, autoAdded)
+	require.Zero(t, autoRemoved)
 	require.Empty(t, settings.UpstreamModelUpdateLastDetectedModels)
 	require.Empty(t, settings.UpstreamModelUpdateLastRemovedModels)
 
@@ -587,6 +590,7 @@ func TestBuildUpstreamModelUpdateTaskNotificationContent_OmitOverflowDetails(t *
 		56,
 		21,
 		9,
+		7,
 		[]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12},
 		channelSummaries,
 		[]string{
@@ -646,4 +650,37 @@ func TestDetectAllChannelUpstreamModelUpdatesRejectsExistingActiveTask(t *testin
 	require.Equal(t, http.StatusConflict, recorder.Code)
 	require.Contains(t, recorder.Body.String(), existing.TaskID)
 	require.Contains(t, recorder.Body.String(), "A model update task is already running or queued")
+}
+
+// Auto sync mirrors the upstream list in both directions: models that
+// disappeared upstream are removed automatically, not only staged for manual
+// confirmation.
+func TestAutoSyncRemovesDisappearedUpstreamModels(t *testing.T) {
+	db := setupModelListControllerTestDB(t)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		// gpt-4.1 and o3 are gone upstream; claude-3.7-sonnet is new.
+		_, _ = w.Write([]byte(`{"data":[{"id":"claude-3.7-sonnet"},{"id":"claude-sonnet"}]}`))
+	}))
+	defer server.Close()
+
+	channel := newAdvancedCustomModelListChannel(server.URL, "secret-key", "/v1/models", nil)
+	channel.Name = "auto sync remove"
+	channel.Models = "gpt-4.1,o3,claude-sonnet"
+	settings := channel.GetOtherSettings()
+	settings.UpstreamModelUpdateCheckEnabled = true
+	settings.UpstreamModelUpdateAutoSyncEnabled = true
+	settings.ModelPrefix = "prefix"
+	channel.Models = "prefix/gpt-4.1,prefix/o3,prefix/claude-sonnet"
+	channel.SetOtherSettings(settings)
+	require.NoError(t, db.Create(channel).Error)
+
+	modelsChanged, autoAdded, autoRemoved, err := checkAndPersistChannelUpstreamModelUpdates(channel, &settings, true, true)
+	require.NoError(t, err)
+	require.True(t, modelsChanged)
+	require.Equal(t, 1, autoAdded)
+	require.Equal(t, 2, autoRemoved)
+	require.ElementsMatch(t, []string{"prefix/claude-3.7-sonnet", "prefix/claude-sonnet"}, normalizeModelNames(lo.Map(strings.Split(channel.Models, ","), func(m string, _ int) string { return m })))
+	// Applied changes are cleared so nothing remains staged for confirmation.
+	require.Empty(t, settings.UpstreamModelUpdateLastDetectedModels)
+	require.Empty(t, settings.UpstreamModelUpdateLastRemovedModels)
 }
