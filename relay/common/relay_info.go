@@ -159,6 +159,10 @@ type RelayInfo struct {
 	SubscriptionAmountUsedAfterPreConsume int64
 	IsClaudeBetaQuery                     bool // /v1/messages?beta=true
 	IsChannelTest                         bool // channel test request
+	// ForceNativeProtocol makes an explicit-endpoint channel test probe the
+	// upstream's native protocol endpoint instead of converting the request.
+	// Auto-detect uses it to see which protocols the upstream really serves.
+	ForceNativeProtocol bool
 	RetryIndex                            int
 	LastError                             *types.NewAPIError
 	RuntimeHeadersOverride                map[string]any

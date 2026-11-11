@@ -1,6 +1,7 @@
 package service
 
 import (
+	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/relaykit/types"
 )
@@ -98,4 +99,32 @@ func ChannelNativelySupports(settings dto.ChannelOtherSettings, format types.Rel
 		return false
 	}
 	return ChannelSupportsProtocol(settings, protocol)
+}
+
+// NativeProtocolPath returns the upstream path suffix for the incoming relay
+// format, used by explicit-endpoint channel probes that must hit the native
+// protocol endpoint instead of a converted one.
+func NativeProtocolPath(info *relaycommon.RelayInfo) (string, bool) {
+	if info == nil {
+		return "", false
+	}
+	switch info.RelayFormat {
+	case types.RelayFormatOpenAI:
+		return "/v1/chat/completions", true
+	case types.RelayFormatOpenAIResponses:
+		return "/v1/responses", true
+	case types.RelayFormatClaude:
+		return "/v1/messages", true
+	case types.RelayFormatGemini:
+		action := "generateContent"
+		if info.IsStream {
+			action = "streamGenerateContent?alt=sse"
+		}
+		if info.UpstreamModelName == "" {
+			return "", false
+		}
+		return "/v1beta/models/" + info.UpstreamModelName + ":" + action, true
+	default:
+		return "", false
+	}
 }

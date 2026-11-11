@@ -3,6 +3,7 @@ package service
 import (
 	"testing"
 
+	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/relaykit/types"
 	"github.com/stretchr/testify/assert"
@@ -113,4 +114,28 @@ func TestChannelNativelySupports(t *testing.T) {
 	assert.False(t, ChannelNativelySupports(chatOnly, types.RelayFormatOpenAIResponses))
 	assert.False(t, ChannelNativelySupports(chatOnly, types.RelayFormatClaude))
 	assert.True(t, ChannelNativelySupports(chatOnly, types.RelayFormatOpenAI))
+}
+
+func TestNativeProtocolPath(t *testing.T) {
+	tests := []struct {
+		format types.RelayFormat
+		model  string
+		stream bool
+		want   string
+		wantOK bool
+	}{
+		{types.RelayFormatOpenAI, "m", false, "/v1/chat/completions", true},
+		{types.RelayFormatOpenAIResponses, "m", false, "/v1/responses", true},
+		{types.RelayFormatClaude, "m", false, "/v1/messages", true},
+		{types.RelayFormatGemini, "gemini-3.8-flash", false, "/v1beta/models/gemini-3.8-flash:generateContent", true},
+		{types.RelayFormatGemini, "gemini-3.8-flash", true, "/v1beta/models/gemini-3.8-flash:streamGenerateContent?alt=sse", true},
+		{types.RelayFormatEmbedding, "m", false, "", false},
+	}
+	for _, tt := range tests {
+		info := &relaycommon.RelayInfo{RelayFormat: tt.format, IsStream: tt.stream,
+			ChannelMeta: &relaycommon.ChannelMeta{UpstreamModelName: tt.model}}
+		got, ok := NativeProtocolPath(info)
+		assert.Equal(t, tt.wantOK, ok, string(tt.format))
+		assert.Equal(t, tt.want, got, string(tt.format))
+	}
 }

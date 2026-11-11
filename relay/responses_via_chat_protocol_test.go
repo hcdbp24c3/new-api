@@ -9,6 +9,7 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
+	openaichannel "github.com/QuantumNous/new-api/relay/channel/openai"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relaykit/dto"
 	relaytypes "github.com/QuantumNous/new-api/relaykit/types"
@@ -265,4 +266,41 @@ func TestResponsesNativePassthroughForNativeResponsesTag(t *testing.T) {
 	require.Contains(t, got, `"delta":"hello native"`)
 	require.Contains(t, got, "event: response.completed")
 	require.NotContains(t, got, "response.failed")
+}
+
+// An explicit-endpoint probe (channel test auto-detect) must hit the native
+// protocol endpoint and leave the request body in its own protocol.
+func TestForceNativeProtocolProbeHitsNativeEndpoint(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"resp_1","object":"response","status":"completed"}`))
+	}))
+	defer server.Close()
+
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+	common.SetContextKey(c, constant.ContextKeyOriginalModel, "gemini-3.8-flash")
+	common.SetContextKey(c, constant.ContextKeyChannelType, constant.ChannelTypeOpenAI)
+	common.SetContextKey(c, constant.ContextKeyChannelBaseUrl, server.URL)
+	// Tags say chat-only; the probe must still test the native responses path.
+	common.SetContextKey(c, constant.ContextKeyChannelOtherSetting, dto.ChannelOtherSettings{
+		SupportedApiProtocols: []string{"chat"},
+	})
+
+	request := &dto.OpenAIResponsesRequest{Model: "gemini-3.8-flash", Input: []byte(`"hi"`)}
+	info := relaycommon.GenRelayInfoResponses(c, request)
+	info.ForceNativeProtocol = true
+	info.InitChannelMeta(c)
+
+	adaptor := &openaichannel.Adaptor{}
+	adaptor.Init(info)
+	converted, err := adaptor.ConvertOpenAIResponsesRequest(c, info, *request)
+	require.NoError(t, err)
+	_, isResponses := converted.(dto.OpenAIResponsesRequest)
+	require.True(t, isResponses, "probe must keep the Responses request, got %T", converted)
+
+	url, err := adaptor.GetRequestURL(info)
+	require.NoError(t, err)
+	assert.Equal(t, server.URL+"/v1/responses", url)
 }

@@ -15,6 +15,7 @@ import (
 	"github.com/QuantumNous/new-api/relay/constant"
 	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/relaykit/types"
+	"github.com/QuantumNous/new-api/service"
 
 	"github.com/gin-gonic/gin"
 	"github.com/samber/lo"
@@ -88,6 +89,11 @@ func (a *Adaptor) Init(info *relaycommon.RelayInfo) {
 }
 
 func (a *Adaptor) GetRequestURL(info *relaycommon.RelayInfo) (string, error) {
+	if info.ForceNativeProtocol {
+		if path, ok := service.NativeProtocolPath(info); ok {
+			return fmt.Sprintf("%s%s", info.ChannelBaseUrl, path), nil
+		}
+	}
 	return GetRequestURL(info)
 }
 
@@ -113,6 +119,9 @@ func (a *Adaptor) ConvertEmbeddingRequest(c *gin.Context, info *relaycommon.Rela
 }
 
 func (a *Adaptor) ConvertOpenAIResponsesRequest(c *gin.Context, info *relaycommon.RelayInfo, request dto.OpenAIResponsesRequest) (any, error) {
+	if info != nil && info.ForceNativeProtocol {
+		return request, nil
+	}
 	adaptor := openai.Adaptor{}
 	return adaptor.ConvertOpenAIResponsesRequest(c, info, request)
 }

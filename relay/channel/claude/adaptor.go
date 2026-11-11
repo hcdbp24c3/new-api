@@ -75,6 +75,11 @@ func (a *Adaptor) Init(info *relaycommon.RelayInfo) {
 }
 
 func (a *Adaptor) GetRequestURL(info *relaycommon.RelayInfo) (string, error) {
+	if info.ForceNativeProtocol {
+		if path, ok := service.NativeProtocolPath(info); ok {
+			return fmt.Sprintf("%s%s", info.ChannelBaseUrl, path), nil
+		}
+	}
 	// Multi-protocol pass-through: native Responses requests go to the
 	// upstream /v1/responses endpoint instead of Anthropic /v1/messages.
 	if info.RelayMode == constant.RelayModeResponses &&
@@ -153,6 +158,9 @@ func (a *Adaptor) ConvertEmbeddingRequest(c *gin.Context, info *relaycommon.Rela
 }
 
 func (a *Adaptor) ConvertOpenAIResponsesRequest(c *gin.Context, info *relaycommon.RelayInfo, request dto.OpenAIResponsesRequest) (any, error) {
+	if info != nil && info.ForceNativeProtocol {
+		return request, nil
+	}
 	// Multi-protocol channels that natively serve the Responses API pass the
 	// request through unchanged; no Claude conversion is needed.
 	if info != nil && service.ChannelNativelySupports(info.ChannelOtherSettings, types.RelayFormatOpenAIResponses) {

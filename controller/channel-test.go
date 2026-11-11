@@ -269,6 +269,9 @@ func testChannel(ctx context.Context, channel *model.Channel, testUserID int, te
 	}
 
 	info.IsChannelTest = true
+	// An explicit endpoint probe must hit the upstream's native protocol
+	// endpoint so auto-detect learns which protocols the upstream serves.
+	info.ForceNativeProtocol = endpointType != ""
 	info.InitChannelMeta(c)
 
 	err = attachTestBillingRequestInput(info, request)
@@ -491,6 +494,15 @@ func testChannel(ctx context.Context, channel *model.Channel, testUserID int, te
 				newAPIError: types.NewOpenAIError(err, types.ErrorCodeBadResponse, httpResp.StatusCode),
 			}
 		}
+	}
+	// An explicit-endpoint probe only needs the upstream status: the body is
+	// parsed by the channel's own protocol adaptor, which may not match the
+	// probed protocol.
+	if info.ForceNativeProtocol {
+		if httpResp != nil {
+			_ = httpResp.Body.Close()
+		}
+		return testResult{context: c}
 	}
 	usageA, respErr := adaptor.DoResponse(c, httpResp, info)
 	if respErr != nil {
@@ -941,6 +953,9 @@ func TestChannel(c *gin.Context) {
 			return
 		}
 
+		if endpointType == "" && summary.Succeeded > 0 {
+			probeAndTagChannelProtocols(requestCtx, channel, testUserID, testModel, isStream, testResult{})
+		}
 		allSucceeded := summary.Succeeded > 0 && summary.Failed == 0
 		c.JSON(http.StatusOK, gin.H{
 			"success":   allSucceeded,
@@ -997,6 +1012,9 @@ func TestChannel(c *gin.Context) {
 					service.EnableChannel(channel.Id, keys[testKeyIndex], channel.Name)
 				}
 			}
+			if endpointType == "" {
+				probeAndTagChannelProtocols(requestCtx, channel, testUserID, testModel, isStream, testResult{})
+			}
 			go channel.UpdateResponseTime(milliseconds)
 			c.JSON(http.StatusOK, gin.H{
 				"success": true,
@@ -1047,48 +1065,8 @@ func TestChannel(c *gin.Context) {
 		return
 	}
 	// Auto (endpointType empty): probe every protocol family the gateway can
-	// detect — OpenAI chat, Responses, Anthropic, Gemini — and tag the channel
-	// with every protocol the upstream actually serves. Multi-protocol
-	// upstreams (e.g. dc-ai gateways that natively speak chat, responses,
-	// anthropic and gemini) then pass requests through in their own protocol
-	// instead of converting them all to chat.
-	probeOrder := []struct {
-		endpoint string
-		protocol string
-		apiType  dto.ChannelApiType
-	}{
-		{string(constant.EndpointTypeOpenAI), "chat", dto.ChannelApiTypeChat},
-		{string(constant.EndpointTypeOpenAIResponse), "responses", dto.ChannelApiTypeResponses},
-		{string(constant.EndpointTypeAnthropic), "anthropic", dto.ChannelApiTypeAnthropic},
-		{string(constant.EndpointTypeGemini), "gemini", dto.ChannelApiTypeGemini},
-	}
-	if endpointType != "" {
-		probeOrder = probeOrder[:0]
-	}
-	var supported []string
-	var primaryProtocol dto.ChannelApiType
-	primaryResult := result
-	for _, candidate := range probeOrder {
-		// Always probe fresh with the explicit endpoint so existing channel
-		// tags cannot steer any probe; auto mode re-detects all families.
-		probeResult := testChannel(requestCtx, channel, testUserID, testModel, candidate.endpoint, isStream)
-		if probeResult.localErr != nil || probeResult.newAPIError != nil {
-			continue
-		}
-		supported = append(supported, candidate.protocol)
-		if len(supported) == 1 {
-			primaryResult = probeResult
-			primaryProtocol = candidate.apiType
-		}
-	}
-	if len(supported) > 0 {
-		result = primaryResult
-		other := channel.GetOtherSettings()
-		other.SupportedApiProtocols = supported
-		other.DetectedApiType = primaryProtocol
-		channel.SetOtherSettings(other)
-		_ = model.DB.Model(channel).Update("settings", channel.OtherSettings).Error
-		model.CacheUpdateChannel(channel)
+	if endpointType == "" {
+		result = probeAndTagChannelProtocols(requestCtx, channel, testUserID, testModel, isStream, result)
 	}
 
 	tok := time.Now()
@@ -1675,4 +1653,57 @@ func TestAllChannels(c *gin.Context) {
 			"status":  task.Status,
 		},
 	})
+}
+
+// probeAndTagChannelProtocols probes every protocol family the gateway can
+// detect — OpenAI chat, Responses, Anthropic, Gemini — and persists the ones
+// the upstream actually serves as SupportedApiProtocols. Multi-protocol
+// upstreams (e.g. dc-ai gateways that natively speak chat, responses,
+// anthropic and gemini) then pass requests through in their own protocol
+// instead of converting everything to chat. Returns the primary result.
+func probeAndTagChannelProtocols(
+	ctx context.Context,
+	channel *model.Channel,
+	testUserID int,
+	testModel string,
+	isStream bool,
+	fallback testResult,
+) testResult {
+	probeOrder := []struct {
+		endpoint string
+		protocol string
+		apiType  dto.ChannelApiType
+	}{
+		{string(constant.EndpointTypeOpenAI), "chat", dto.ChannelApiTypeChat},
+		{string(constant.EndpointTypeOpenAIResponse), "responses", dto.ChannelApiTypeResponses},
+		{string(constant.EndpointTypeAnthropic), "anthropic", dto.ChannelApiTypeAnthropic},
+		{string(constant.EndpointTypeGemini), "gemini", dto.ChannelApiTypeGemini},
+	}
+
+	var supported []string
+	var primaryProtocol dto.ChannelApiType
+	primaryResult := fallback
+	for _, candidate := range probeOrder {
+		// Always probe fresh with the explicit endpoint so existing channel
+		// tags cannot steer any probe; auto mode re-detects all families.
+		probeResult := testChannel(ctx, channel, testUserID, testModel, candidate.endpoint, isStream)
+		if probeResult.localErr != nil || probeResult.newAPIError != nil {
+			continue
+		}
+		supported = append(supported, candidate.protocol)
+		if len(supported) == 1 {
+			primaryResult = probeResult
+			primaryProtocol = candidate.apiType
+		}
+	}
+	if len(supported) == 0 {
+		return fallback
+	}
+	other := channel.GetOtherSettings()
+	other.SupportedApiProtocols = supported
+	other.DetectedApiType = primaryProtocol
+	channel.SetOtherSettings(other)
+	_ = model.DB.Model(channel).Update("settings", channel.OtherSettings).Error
+	model.CacheUpdateChannel(channel)
+	return primaryResult
 }

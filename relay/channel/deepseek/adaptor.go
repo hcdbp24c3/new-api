@@ -83,6 +83,11 @@ func (a *Adaptor) GetRequestURL(info *relaycommon.RelayInfo) (string, error) {
 		if !strings.HasSuffix(info.ChannelBaseUrl, "/beta") {
 			fimBaseUrl += "/beta"
 		}
+		if info.ForceNativeProtocol {
+			if path, ok := service.NativeProtocolPath(info); ok {
+				return fmt.Sprintf("%s%s", info.ChannelBaseUrl, path), nil
+			}
+		}
 		switch info.RelayMode {
 		case constant.RelayModeCompletions:
 			return fmt.Sprintf("%s/completions", fimBaseUrl), nil
@@ -207,6 +212,9 @@ func (a *Adaptor) ConvertEmbeddingRequest(c *gin.Context, info *relaycommon.Rela
 }
 
 func (a *Adaptor) ConvertOpenAIResponsesRequest(c *gin.Context, info *relaycommon.RelayInfo, request dto.OpenAIResponsesRequest) (any, error) {
+	if info != nil && info.ForceNativeProtocol {
+		return request, nil
+	}
 	if info != nil && service.ChannelTargetsChat(info.ChannelOtherSettings) {
 		// The channel is chat-only (the normal DeepSeek setup): convert the
 		// incoming Responses request to chat completions the same way the

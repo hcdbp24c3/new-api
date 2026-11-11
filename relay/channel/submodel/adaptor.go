@@ -40,6 +40,11 @@ func (a *Adaptor) Init(info *relaycommon.RelayInfo) {
 }
 
 func (a *Adaptor) GetRequestURL(info *relaycommon.RelayInfo) (string, error) {
+	if info.ForceNativeProtocol {
+		if path, ok := service.NativeProtocolPath(info); ok {
+			return fmt.Sprintf("%s%s", info.ChannelBaseUrl, path), nil
+		}
+	}
 	if (info.RelayMode == relayconstant.RelayModeResponses || info.RelayMode == relayconstant.RelayModeResponsesCompact) &&
 		service.ChannelTargetsChat(info.ChannelOtherSettings) {
 		return fmt.Sprintf("%s/v1/chat/completions", info.ChannelBaseUrl), nil
@@ -69,6 +74,9 @@ func (a *Adaptor) ConvertEmbeddingRequest(c *gin.Context, info *relaycommon.Rela
 }
 
 func (a *Adaptor) ConvertOpenAIResponsesRequest(c *gin.Context, info *relaycommon.RelayInfo, request dto.OpenAIResponsesRequest) (any, error) {
+	if info != nil && info.ForceNativeProtocol {
+		return request, nil
+	}
 	adaptor := openai.Adaptor{}
 	return adaptor.ConvertOpenAIResponsesRequest(c, info, request)
 }

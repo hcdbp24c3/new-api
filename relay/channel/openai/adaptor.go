@@ -49,8 +49,9 @@ type Adaptor struct {
 
 func (a *Adaptor) ConvertGeminiRequest(c *gin.Context, info *relaycommon.RelayInfo, request *dto.GeminiChatRequest) (any, error) {
 	// Multi-protocol channels that natively serve Gemini pass the request
-	// through in its own protocol instead of converting to chat.
-	if info != nil && service.ChannelNativelySupports(info.ChannelOtherSettings, types.RelayFormatGemini) {
+	// through in its own protocol instead of converting to chat. An
+	// explicit-endpoint probe always tests the native protocol.
+	if info != nil && (info.ForceNativeProtocol || service.ChannelNativelySupports(info.ChannelOtherSettings, types.RelayFormatGemini)) {
 		return request, nil
 	}
 	result, err := service.ConvertRequest(c, info, types.RelayFormatOpenAI, request)
@@ -71,8 +72,9 @@ func (a *Adaptor) ConvertGeminiRequest(c *gin.Context, info *relaycommon.RelayIn
 
 func (a *Adaptor) ConvertClaudeRequest(c *gin.Context, info *relaycommon.RelayInfo, request *dto.ClaudeRequest) (any, error) {
 	// Multi-protocol channels that natively serve Anthropic Messages pass the
-	// request through in its own protocol instead of converting to chat.
-	if info != nil && service.ChannelNativelySupports(info.ChannelOtherSettings, types.RelayFormatClaude) {
+	// request through in its own protocol instead of converting to chat. An
+	// explicit-endpoint probe always tests the native protocol.
+	if info != nil && (info.ForceNativeProtocol || service.ChannelNativelySupports(info.ChannelOtherSettings, types.RelayFormatClaude)) {
 		return request, nil
 	}
 	//if !strings.Contains(request.Model, "claude") {
@@ -218,6 +220,11 @@ func (a *Adaptor) GetRequestURL(info *relaycommon.RelayInfo) (string, error) {
 			return fmt.Sprintf("%s/v1/chat/completions", base), nil
 		}
 	default:
+		if info.ForceNativeProtocol {
+			if path, ok := service.NativeProtocolPath(info); ok {
+				return fmt.Sprintf("%s%s", info.ChannelBaseUrl, path), nil
+			}
+		}
 		// Multi-protocol pass-through: when the channel's protocol tags
 		// include the incoming format, route to that format's native upstream
 		// endpoint instead of converting to chat completions.
@@ -775,8 +782,9 @@ func detectImageMimeType(filename string) string {
 
 func (a *Adaptor) ConvertOpenAIResponsesRequest(c *gin.Context, info *relaycommon.RelayInfo, request dto.OpenAIResponsesRequest) (any, error) {
 	// Multi-protocol channels that natively serve the Responses API pass the
-	// request through unchanged; no chat conversion is needed.
-	if info != nil && service.ChannelNativelySupports(info.ChannelOtherSettings, types.RelayFormatOpenAIResponses) {
+	// request through unchanged; no chat conversion is needed. An
+	// explicit-endpoint probe always tests the native protocol.
+	if info != nil && (info.ForceNativeProtocol || service.ChannelNativelySupports(info.ChannelOtherSettings, types.RelayFormatOpenAIResponses)) {
 		return request, nil
 	}
 	if info != nil && service.ChannelTargetsChat(info.ChannelOtherSettings) {
@@ -891,6 +899,15 @@ func (a *Adaptor) DoResponse(c *gin.Context, resp *http.Response, info *relaycom
 	case relayconstant.RelayModeRerank:
 		usage, err = common_handler.RerankHandler(c, info, resp)
 	case relayconstant.RelayModeResponses:
+		// Explicit-endpoint probes consume the native protocol response.
+		if info.ForceNativeProtocol {
+			if info.IsStream {
+				usage, err = OaiResponsesStreamHandler(c, info, resp)
+			} else {
+				usage, err = OaiResponsesHandler(c, info, resp)
+			}
+			return
+		}
 		// Native Responses support wins: a multi-protocol channel tagged with
 		// "responses" passed the request through unchanged and must consume the
 		// native Responses response. Chat conversion applies only when the
