@@ -103,6 +103,11 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 			}
 			if relayFormat != types.RelayFormatOpenAIRealtime {
 				c.Header("Content-Type", "application/json; charset=utf-8")
+				// Tell clients (and the CDN in front of the gateway) how long to
+				// back off when an upstream capacity failure exhausted retries.
+				if newAPIError.StatusCode >= http.StatusInternalServerError {
+					c.Header("Retry-After", "30")
+				}
 			}
 			switch relayFormat {
 			case types.RelayFormatOpenAIRealtime:
