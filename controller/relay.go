@@ -230,6 +230,17 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		if decision.Action != "retry" {
 			break
 		}
+		// Back off between attempts. An upstream returning 502/503 needs time
+		// to recover; immediate retries only multiply the load and usually all
+		// fail. RETRY_BACKOFF_MS is the base delay (0 keeps the old immediate
+		// retry behavior).
+		if delay := relayRetryBackoff(retryParam.GetRetry()); delay > 0 {
+			select {
+			case <-c.Request.Context().Done():
+				return
+			case <-time.After(delay):
+			}
+		}
 	}
 
 	useChannel := c.GetStringSlice("use_channel")
@@ -892,4 +903,21 @@ func decideTaskRetry(c *gin.Context, taskErr *taskdto.TaskError, retryTimes int)
 		return retry
 	}
 	return stop
+}
+
+// relayRetryBackoff returns the wait before the next upstream attempt. The
+// configured base delay (RETRY_BACKOFF_MS) doubles per attempt and is capped so
+// a struggling upstream gets time to recover without stalling a request for
+// long.
+func relayRetryBackoff(attempt int) time.Duration {
+	base := common.GetEnvOrDefault("RETRY_BACKOFF_MS", 0)
+	if base <= 0 {
+		return 0
+	}
+	shift := min(attempt, 5)
+	delay := time.Duration(base) * time.Millisecond * time.Duration(1<<shift)
+	if delay > 30*time.Second {
+		return 30 * time.Second
+	}
+	return delay
 }
