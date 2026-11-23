@@ -104,7 +104,7 @@ func openAIRawChannelModelMetadata(items []map[string]any) map[string]upstreamMo
 				entry.ContextLength = positiveMetadataInt(source, "context_length", "contextLength", "context_window", "contextWindow", "max_context_length", "max_input_tokens", "max_model_len", "input_token_limit")
 			}
 			if entry.MaxOutputTokens == 0 {
-				entry.MaxOutputTokens = positiveMetadataInt(source, "max_output_tokens", "maxOutputTokens", "max_completion_tokens", "output_token_limit", "max_tokens")
+				entry.MaxOutputTokens = positiveMetadataInt(source, "max_output_tokens", "maxOutputTokens", "max_output", "maxOutput", "max_completion_tokens", "output_token_limit", "max_tokens")
 			}
 			if entry.Description == "" {
 				entry.Description, _ = metadataString(source, "description")

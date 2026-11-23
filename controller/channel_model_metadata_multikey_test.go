@@ -18,7 +18,8 @@ import (
 const tokenHarborModelsBody = `{"object":"list","data":[
 {"id":"claude-sonnet-4.6","object":"model","owned_by":"tokenharbor","context_length":null,"tool_call":true,"function_call":true,"reasoning":{"efforts":null,"default_effort":null,"can_disable":null}},
 {"id":"claude-opus-5.5","object":"model","owned_by":"tokenharbor","context_length":1000000,"tool_call":true,"function_call":true,"reasoning":{"efforts":["low","medium","high","xhigh"],"default_effort":"medium","can_disable":false}},
-{"id":"deepseek-v4.1-flash:free","object":"model","owned_by":"tokenharbor","context_length":1048576,"tool_call":true,"function_call":true,"reasoning":{"efforts":null,"default_effort":null,"can_disable":null}}
+{"id":"deepseek-v4.1-flash:free","object":"model","owned_by":"tokenharbor","context_length":1048576,"tool_call":true,"function_call":true,"reasoning":{"efforts":null,"default_effort":null,"can_disable":null}},
+{"id":"deepseek-v4.1-flash-free","object":"model","owned_by":"opencode","context_window":200000,"max_output":32000,"reasoning":true,"tool_call":true}
 ]}`
 
 func TestFetchChannelUpstreamModelMetadataAsksMultiKeyChannels(t *testing.T) {
@@ -60,6 +61,11 @@ func TestFetchChannelUpstreamModelMetadataAsksMultiKeyChannels(t *testing.T) {
 	assert.Equal(t, 1000000, opus.ContextLength)
 	require.NotNil(t, opus.Reasoning)
 	assert.True(t, *opus.Reasoning)
+
+	// opencode2api names the output limit max_output.
+	relay := metadata["deepseek-v4.1-flash-free"]
+	assert.Equal(t, 200000, relay.ContextLength)
+	assert.Equal(t, 32000, relay.MaxOutputTokens)
 
 	sonnet := metadata["claude-sonnet-4.6"]
 	assert.Zero(t, sonnet.ContextLength)
