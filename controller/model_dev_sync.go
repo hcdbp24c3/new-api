@@ -371,7 +371,9 @@ func loadChannelModelMetadata(channels []model.Channel, wanted map[string]struct
 
 	merged := make(map[string]upstreamModelMetadata)
 	for i := range channels {
-		mergeUpstreamModelMetadata(merged, results[i], model.ExtractModelPrefix(channels[i].OtherSettings))
+		prefix := model.ExtractModelPrefix(channels[i].OtherSettings)
+		mergeUpstreamModelMetadata(merged, mappedUpstreamModelMetadata(&channels[i], results[i]), prefix)
+		mergeUpstreamModelMetadata(merged, results[i], prefix)
 	}
 	return merged
 }
@@ -389,6 +391,27 @@ func channelServesAnyModel(channel *model.Channel, wanted map[string]struct{}) b
 		}
 	}
 	return false
+}
+
+// mappedUpstreamModelMetadata returns the provider's metadata under the names
+// the channel's model mapping exposes: a channel that serves "alias" by sending
+// "real-model" upstream describes "alias" with the metadata of "real-model".
+func mappedUpstreamModelMetadata(channel *model.Channel, metadata map[string]upstreamModelMetadata) map[string]upstreamModelMetadata {
+	raw := strings.TrimSpace(channel.GetModelMapping())
+	if raw == "" || raw == "{}" || len(metadata) == 0 {
+		return nil
+	}
+	var mapping map[string]string
+	if err := common.UnmarshalJsonStr(raw, &mapping); err != nil {
+		return nil
+	}
+	mapped := make(map[string]upstreamModelMetadata, len(mapping))
+	for alias, target := range mapping {
+		if entry, exists := metadata[strings.TrimSpace(target)]; exists {
+			mapped[strings.TrimSpace(alias)] = entry
+		}
+	}
+	return mapped
 }
 
 // mergeUpstreamModelMetadata folds one channel's result into the shared map
@@ -777,6 +800,18 @@ func (modelDevSyncHandler) Interval() time.Duration {
 func (modelDevSyncHandler) NewPayload() any { return nil }
 
 func (h modelDevSyncHandler) Run(ctx context.Context, task *model.SystemTask, runnerID string) {
+	updatedCount, createdCount, err := runCapabilitySync(ctx)
+	if err != nil {
+		finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusFailed, nil, err)
+		return
+	}
+	result := map[string]any{"updated_count": updatedCount, "created_count": createdCount}
+	finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusSucceeded, result, nil)
+}
+
+// runCapabilitySync resolves every model's capabilities from the provider API,
+// then models.dev, and writes whatever changed.
+func runCapabilitySync(ctx context.Context) (updatedCount, createdCount int, err error) {
 	// The provider API is the first source, so a models.dev outage must not
 	// stop the run: it only removes the fallback.
 	catalog, _, catalogErr := fetchModelDevCatalogWithContext(ctx)
@@ -785,11 +820,8 @@ func (h modelDevSyncHandler) Run(ctx context.Context, task *model.SystemTask, ru
 	}
 	items, err := loadCapabilitySyncPlan(catalog)
 	if err != nil {
-		finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusFailed, nil, err)
-		return
+		return 0, 0, err
 	}
-
-	updatedCount, createdCount := 0, 0
 	for _, item := range items {
 		changed, err := applyCapabilitySyncItem(item)
 		if err != nil {
@@ -807,9 +839,29 @@ func (h modelDevSyncHandler) Run(ctx context.Context, task *model.SystemTask, ru
 	if createdCount > 0 {
 		model.RefreshPricing()
 	}
+	return updatedCount, createdCount, nil
+}
 
-	result := map[string]any{"updated_count": updatedCount, "created_count": createdCount}
-	finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusSucceeded, result, nil)
+// capabilitySyncRun keeps manual runs from overlapping: each one queries every
+// channel's provider.
+var capabilitySyncRun sync.Mutex
+
+// SyncModelsDevRun refreshes model capabilities right away. The metadata sync
+// wizard calls it so one action covers both the official metadata and the
+// capabilities reported by the providers.
+func SyncModelsDevRun(c *gin.Context) {
+	if !capabilitySyncRun.TryLock() {
+		c.JSON(http.StatusConflict, gin.H{"success": false, "message": "Capability sync is already running"})
+		return
+	}
+	defer capabilitySyncRun.Unlock()
+	updatedCount, createdCount, err := runCapabilitySync(c.Request.Context())
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	recordManageAudit(c, "model.models_dev.sync", map[string]any{"updated_count": updatedCount, "created_count": createdCount})
+	common.ApiSuccess(c, gin.H{"updated_count": updatedCount, "created_count": createdCount})
 }
 
 func init() {

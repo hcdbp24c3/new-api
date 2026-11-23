@@ -72,3 +72,27 @@ func TestFetchChannelUpstreamModelMetadataAsksMultiKeyChannels(t *testing.T) {
 	require.NotNil(t, sonnet.ToolCall)
 	assert.True(t, *sonnet.ToolCall)
 }
+
+func TestLoadChannelModelMetadataFollowsModelMapping(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, tokenHarborModelsBody)
+	}))
+	t.Cleanup(upstream.Close)
+
+	baseURL := upstream.URL
+	mapping := `{"tokenharbor/deepseek-v4.1-flash:free":"deepseek-v4.1-flash:free"}`
+	channels := []model.Channel{{
+		Id:           9,
+		Type:         constant.ChannelTypeOpenAI,
+		Key:          "key-1",
+		BaseURL:      &baseURL,
+		Status:       common.ChannelStatusEnabled,
+		Models:       "tokenharbor/deepseek-v4.1-flash:free",
+		ModelMapping: &mapping,
+	}}
+	wanted := map[string]struct{}{"tokenharbor/deepseek-v4.1-flash:free": {}}
+
+	metadata := loadChannelModelMetadata(channels, wanted)
+	assert.Equal(t, 1048576, metadata["tokenharbor/deepseek-v4.1-flash:free"].ContextLength)
+}

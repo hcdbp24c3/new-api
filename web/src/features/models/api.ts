@@ -253,6 +253,14 @@ export async function applyModelsDevSync(
   return res.data
 }
 
+/**
+ * Refresh model capabilities now: provider API first, then models.dev
+ */
+export async function runCapabilitySync(): Promise<ModelsDevSyncApplyResponse> {
+  const res = await api.post('/api/models/model_dev_sync/run')
+  return res.data
+}
+
 // ============================================================================
 // Utility Operations
 // ============================================================================

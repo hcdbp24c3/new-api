@@ -6435,6 +6435,8 @@
     "Sync models": "同步模型",
     "Sync Now": "立即同步",
     "Sync policy": "同步策略",
+    "Capability sync failed": "Capability sync failed",
+    "Updated capabilities of {{count}} models from provider APIs and models.dev": "Updated capabilities of {{count}} models from provider APIs and models.dev",
     "Sync pricing": "同步价格",
     "Sync results": "同步结果",
     "Sync scope": "同步范围",

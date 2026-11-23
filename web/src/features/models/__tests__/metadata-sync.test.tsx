@@ -104,7 +104,10 @@ describe('metadata sync preview', () => {
       screen.queryByRole('checkbox', { name: 'Select protected-model' })
     ).not.toBeInTheDocument()
     expect(screen.getByText('Metadata sync disabled')).toBeVisible()
-    expect(post).not.toHaveBeenCalled()
+    expect(post).not.toHaveBeenCalledWith(
+      '/api/models/sync_upstream',
+      expect.anything()
+    )
     await user.click(
       screen.getByRole('button', { name: 'Preview selected changes' })
     )
@@ -125,7 +128,10 @@ describe('metadata sync preview', () => {
     await user.click(
       screen.getByRole('button', { name: 'Review confirmation' })
     )
-    expect(post).not.toHaveBeenCalled()
+    expect(post).not.toHaveBeenCalledWith(
+      '/api/models/sync_upstream',
+      expect.anything()
+    )
     expect(screen.getByText(/Example vendor/)).toBeInTheDocument()
     await user.click(
       screen.getByRole('button', { name: 'Apply 2 model changes' })
@@ -247,7 +253,10 @@ describe('metadata sync preview', () => {
       })
     )
     expect(screen.getByText('21 selected models')).toBeVisible()
-    expect(post).not.toHaveBeenCalled()
+    expect(post).not.toHaveBeenCalledWith(
+      '/api/models/sync_upstream',
+      expect.anything()
+    )
     await user.click(
       screen.getByRole('button', { name: 'Preview selected changes' })
     )
@@ -391,7 +400,10 @@ describe('metadata sync preview', () => {
     await user.click(
       screen.getByRole('button', { name: 'Review confirmation' })
     )
-    expect(post).not.toHaveBeenCalled()
+    expect(post).not.toHaveBeenCalledWith(
+      '/api/models/sync_upstream',
+      expect.anything()
+    )
     await user.click(
       screen.getByRole('button', { name: 'Apply 3 model changes' })
     )
@@ -698,7 +710,10 @@ describe('metadata sync preview', () => {
     expect(
       screen.getByRole('button', { name: 'Preview selected changes' })
     ).toBeDisabled()
-    expect(post).not.toHaveBeenCalled()
+    expect(post).not.toHaveBeenCalledWith(
+      '/api/models/sync_upstream',
+      expect.anything()
+    )
     client.clear()
   })
 })
