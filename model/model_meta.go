@@ -131,6 +131,8 @@ func FillModelSquareStates(rows []*Model, configured map[string][]int, connectio
 	available := make(map[string]bool)
 	for _, connection := range connections {
 		available[connection.BareModel] = true
+		// A record named after the prefixed name a client calls is served too.
+		available[connection.Model] = true
 	}
 	states := make(map[string]ModelSquareState, len(names))
 	for _, name := range names {
@@ -200,6 +202,25 @@ func GetConfiguredModelChannels() (map[string][]int, error) {
 		}
 	}
 	return configured, nil
+}
+
+// GetClientModelChannels maps the names clients actually call to the channels
+// that serve them. A channel with a model prefix that stores bare names serves
+// them as "prefix/name", a name GetConfiguredModelChannels does not list.
+func GetClientModelChannels() (map[string][]int, error) {
+	var channels []Channel
+	if err := DB.Select("id", "models", "settings").Find(&channels).Error; err != nil {
+		return nil, err
+	}
+	served := make(map[string][]int)
+	for _, channel := range channels {
+		prefix := ExtractModelPrefix(channel.OtherSettings)
+		for _, name := range normalizeLookupValues(channel.GetModels()) {
+			client := channelModelClientName(name, prefix)
+			served[client] = append(served[client], channel.Id)
+		}
+	}
+	return served, nil
 }
 
 // SearchModelsWithChannels augments metadata with concrete configured names.

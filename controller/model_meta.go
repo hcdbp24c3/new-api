@@ -253,6 +253,10 @@ func enrichModels(models []*model.Model) error {
 	if err != nil {
 		return err
 	}
+	clientNames, err := model.GetClientModelChannels()
+	if err != nil {
+		return err
+	}
 	for _, metadata := range models {
 		if metadata == nil {
 			continue
@@ -264,6 +268,12 @@ func enrichModels(models []*model.Model) error {
 				for _, id := range ids {
 					channelIDs[id] = struct{}{}
 				}
+			}
+		}
+		// A record may be named after the prefixed name clients call.
+		if metadata.NameRule == model.NameRuleExact {
+			for _, id := range clientNames[metadata.ModelName] {
+				channelIDs[id] = struct{}{}
 			}
 		}
 		metadata.ConfiguredChannelCount = len(channelIDs)

@@ -473,3 +473,23 @@ func TestApplyCapabilitySyncItemCreatesRecord(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 1048576, capabilities[name].ContextLength)
 }
+
+// A record the capability sync creates is named after the prefixed name
+// clients call; the model list must still tie it to the channel serving it.
+func TestEnrichModelsBindsPrefixedClientName(t *testing.T) {
+	db := modelManagementDB(t, "sqlite", "")
+	channel := &model.Channel{Id: 1, Name: "owu", Key: "k", Status: common.ChannelStatusEnabled,
+		Models: "host/gpt-5.2", Group: "default", OtherSettings: `{"model_prefix":"owu"}`}
+	require.NoError(t, db.Create(channel).Error)
+	require.NoError(t, channel.AddAbilities(nil))
+	record := &model.Model{ModelName: "owu/host/gpt-5.2", ContextLength: 400000, Status: 1}
+	require.NoError(t, db.Create(record).Error)
+	other := &model.Model{ModelName: "owu/host/gone", Status: 1}
+	require.NoError(t, db.Create(other).Error)
+
+	require.NoError(t, enrichModels([]*model.Model{record, other}))
+	assert.Equal(t, 1, record.ConfiguredChannelCount)
+	assert.Equal(t, model.ModelSquareVisible, record.SquareState)
+	assert.Zero(t, other.ConfiguredChannelCount)
+	assert.Equal(t, model.ModelSquareUnavailable, other.SquareState)
+}
