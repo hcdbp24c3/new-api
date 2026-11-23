@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/model"
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -250,4 +252,224 @@ func TestMergeUpstreamModelMetadataAppliesChannelPrefix(t *testing.T) {
 
 	require.Contains(t, merged, "deepseek/deepseek-chat")
 	assert.Equal(t, 128000, merged["deepseek/deepseek-chat"].ContextLength)
+}
+
+// Token Harbor reports limits as flat fields and reasoning as an object, with
+// an empty efforts list meaning "no reasoning" and null meaning "unknown".
+func TestOpenAIRawChannelModelMetadataReadsGatewayShapes(t *testing.T) {
+	var items []map[string]any
+	require.NoError(t, common.Unmarshal([]byte(`[
+		{"id":"deepseek-v4.1-flash:free","context_length":1048576,"max_output_tokens":384000,
+		 "reasoning":{"efforts":["low","high"],"default_effort":"high","can_disable":true}},
+		{"id":"no-reasoning","context_length":131072,"reasoning":{"efforts":[],"default_effort":null}},
+		{"id":"unknown-reasoning","context_length":131072,"reasoning":{"efforts":null}},
+		{"id":"openrouter-style","top_provider":{"context_length":200000,"max_completion_tokens":64000},
+		 "supported_parameters":["tools","temperature"]},
+		{"id":"litellm-style","model_info":{"max_input_tokens":128000,"max_output_tokens":16384,
+		 "supports_function_calling":true,"supports_reasoning":true}},
+		{"id":"models-dev-style","limit":{"context":400000,"output":128000},"capabilities":{"tools":true,"reasoning":false}},
+		{"id":"window-style","context_window":65536},
+		{"id":"relayed-blank","reasoning":false,"tool_call":false},
+		{"id":"plain","object":"model","owned_by":"acme"}
+	]`), &items))
+
+	metadata := openAIRawChannelModelMetadata(items)
+
+	free := metadata["deepseek-v4.1-flash:free"]
+	assert.Equal(t, 1048576, free.ContextLength)
+	assert.Equal(t, 384000, free.MaxOutputTokens)
+	require.NotNil(t, free.Reasoning)
+	assert.True(t, *free.Reasoning)
+	assert.Nil(t, free.ToolCall)
+
+	require.NotNil(t, metadata["no-reasoning"].Reasoning)
+	assert.False(t, *metadata["no-reasoning"].Reasoning)
+	assert.Nil(t, metadata["unknown-reasoning"].Reasoning)
+
+	router := metadata["openrouter-style"]
+	assert.Equal(t, 200000, router.ContextLength)
+	assert.Equal(t, 64000, router.MaxOutputTokens)
+	require.NotNil(t, router.ToolCall)
+	assert.True(t, *router.ToolCall)
+	require.NotNil(t, router.Reasoning)
+	assert.False(t, *router.Reasoning)
+
+	lite := metadata["litellm-style"]
+	assert.Equal(t, 128000, lite.ContextLength)
+	assert.Equal(t, 16384, lite.MaxOutputTokens)
+	require.NotNil(t, lite.ToolCall)
+	assert.True(t, *lite.ToolCall)
+	require.NotNil(t, lite.Reasoning)
+	assert.True(t, *lite.Reasoning)
+
+	dev := metadata["models-dev-style"]
+	assert.Equal(t, 400000, dev.ContextLength)
+	assert.Equal(t, 128000, dev.MaxOutputTokens)
+	require.NotNil(t, dev.ToolCall)
+	assert.True(t, *dev.ToolCall)
+	require.NotNil(t, dev.Reasoning)
+	assert.False(t, *dev.Reasoning)
+
+	assert.Equal(t, 65536, metadata["window-style"].ContextLength)
+	assert.NotContains(t, metadata, "relayed-blank")
+	assert.NotContains(t, metadata, "plain")
+}
+
+func capabilityTestCatalog() *modelDevCatalog {
+	return &modelDevCatalog{Providers: map[string]modelDevProvider{
+		"deepseek": {Id: "deepseek", Name: "DeepSeek", Models: map[string]modelDevModel{
+			"deepseek-v4.1-flash": {Id: "deepseek-v4.1-flash", Reasoning: true, ToolCall: true,
+				Limit: modelDevLimit{Context: 1000000, Output: 384000}, Cost: modelDevCost{Input: 0.3, Output: 1.2}},
+		}},
+		"opencode": {Id: "opencode", Name: "OpenCode Zen", Models: map[string]modelDevModel{
+			"deepseek-v4.1-flash-free": {Id: "deepseek-v4.1-flash-free", Reasoning: true, ToolCall: true,
+				Limit: modelDevLimit{Context: 200000, Output: 64000}},
+		}},
+		"other": {Id: "other", Name: "Other", Models: map[string]modelDevModel{
+			"deepseek-v4.1-flash": {Id: "deepseek-v4.1-flash", Limit: modelDevLimit{Context: 128000, Output: 8000}},
+			"vendor/nested-model": {Id: "vendor/nested-model", Limit: modelDevLimit{Context: 32000}},
+		}},
+		"third": {Id: "third", Name: "Third", Models: map[string]modelDevModel{
+			"deepseek-v4.1-flash": {Id: "deepseek-v4.1-flash", Limit: modelDevLimit{Context: 1000000, Output: 384000}},
+		}},
+	}}
+}
+
+// A suffix names a different model: "-free" and ":free" are never stripped,
+// only leading channel segments are.
+func TestModelDevIndexLookupKeepsSuffixes(t *testing.T) {
+	index := buildModelDevIndex(capabilityTestCatalog())
+
+	entry, ok := index.lookup("opencode2api/deepseek-v4.1-flash-free", "")
+	require.True(t, ok)
+	assert.Equal(t, 200000, entry.Model.Limit.Context)
+
+	_, ok = index.lookup("tokenharbor/deepseek-v4.1-flash:free", "")
+	assert.False(t, ok)
+	_, ok = index.lookup("deepseek-v4.1-flash-latest", "")
+	assert.False(t, ok)
+
+	// Several providers list the bare name: the common context size wins.
+	entry, ok = index.lookup("anychannel/deepseek-v4.1-flash", "")
+	require.True(t, ok)
+	assert.Equal(t, 1000000, entry.Model.Limit.Context)
+
+	// A provider named in the gateway name or matching the vendor wins.
+	entry, ok = index.lookup("other/deepseek-v4.1-flash", "")
+	require.True(t, ok)
+	assert.Equal(t, 128000, entry.Model.Limit.Context)
+	entry, ok = index.lookup("deepseek-v4.1-flash", "other")
+	require.True(t, ok)
+	assert.Equal(t, 128000, entry.Model.Limit.Context)
+
+	entry, ok = index.lookup("channel/vendor/nested-model", "")
+	require.True(t, ok)
+	assert.Equal(t, 32000, entry.Model.Limit.Context)
+	entry, ok = index.lookup("nested-model", "")
+	require.True(t, ok)
+	assert.Equal(t, 32000, entry.Model.Limit.Context)
+}
+
+// The order is provider API, then models.dev, then nothing.
+func TestPlanCapabilitySyncOrder(t *testing.T) {
+	channel := func(id int, models, prefix string) model.Channel {
+		ch := model.Channel{Id: id, Status: common.ChannelStatusEnabled, Models: models}
+		if prefix != "" {
+			ch.OtherSettings = `{"model_prefix":"` + prefix + `"}`
+		}
+		return ch
+	}
+	state := capabilitySyncState{
+		Index:   buildModelDevIndex(capabilityTestCatalog()),
+		Vendors: []*model.Vendor{{Id: 1, Name: "DeepSeek"}},
+		Models: []*model.Model{
+			{Id: 1, ModelName: "deepseek-v4.1-flash", VendorID: 1, SyncOfficial: 1},
+			{Id: 2, ModelName: "frozen-model", SyncOfficial: 0},
+			{Id: 3, ModelName: "ruled-", NameRule: model.NameRulePrefix, SyncOfficial: 1},
+		},
+		Channels: []model.Channel{
+			channel(1, "deepseek-v4.1-flash:free,api-only-model,unknown-model,frozen-model,ruled-model", "tokenharbor"),
+			channel(2, "deepseek-v4.1-flash-free,deepseek-v4.1-flash", "opencode2api"),
+			channel(3, "deepseek-v4.1-flash", ""),
+		},
+		Upstream: map[string]upstreamModelMetadata{
+			"tokenharbor/deepseek-v4.1-flash:free": {ContextLength: 1048576, Reasoning: lo.ToPtr(true)},
+			"tokenharbor/api-only-model":           {ContextLength: 64000, ToolCall: lo.ToPtr(true)},
+			"tokenharbor/frozen-model":             {ContextLength: 64000},
+			"tokenharbor/ruled-model":              {ContextLength: 64000},
+			"deepseek-v4.1-flash":                  {MaxOutputTokens: 100000},
+		},
+	}
+
+	items := planCapabilitySync(state)
+	byName := map[string]capabilitySyncItem{}
+	for _, item := range items {
+		byName[item.Candidate.ModelName] = item
+	}
+	value := func(name, field string) any {
+		for _, f := range byName[name].Candidate.Fields {
+			if f.Field == field {
+				return f.Upstream
+			}
+		}
+		return nil
+	}
+
+	// API only: the suffixed name has no catalog entry, and none is borrowed.
+	require.Contains(t, byName, "tokenharbor/deepseek-v4.1-flash:free")
+	assert.Equal(t, "create", byName["tokenharbor/deepseek-v4.1-flash:free"].Candidate.Kind)
+	assert.Equal(t, "api", byName["tokenharbor/deepseek-v4.1-flash:free"].Candidate.Provider)
+	assert.Equal(t, 1048576, value("tokenharbor/deepseek-v4.1-flash:free", "context_length"))
+	assert.Equal(t, true, value("tokenharbor/deepseek-v4.1-flash:free", "reasoning"))
+	assert.Nil(t, value("tokenharbor/deepseek-v4.1-flash:free", "max_output_tokens"))
+	assert.Nil(t, value("tokenharbor/deepseek-v4.1-flash:free", "tool_call"))
+	assert.Equal(t, 64000, value("tokenharbor/api-only-model", "context_length"))
+
+	// models.dev only, matched by exact name with the suffix kept.
+	assert.Equal(t, 200000, value("opencode2api/deepseek-v4.1-flash-free", "context_length"))
+	assert.Nil(t, byName["opencode2api/deepseek-v4.1-flash-free"].Pricing)
+
+	// API wins per field, the catalog fills the rest, vendor-matched prices apply.
+	assert.Equal(t, "update", byName["deepseek-v4.1-flash"].Candidate.Kind)
+	assert.Equal(t, 100000, value("deepseek-v4.1-flash", "max_output_tokens"))
+	assert.Equal(t, 1000000, value("deepseek-v4.1-flash", "context_length"))
+	assert.Equal(t, 0.3, value("deepseek-v4.1-flash", "pricing_input"))
+
+	// Nothing known, sync turned off, covered by a rule or by the bare record.
+	assert.NotContains(t, byName, "tokenharbor/unknown-model")
+	assert.NotContains(t, byName, "frozen-model")
+	assert.NotContains(t, byName, "tokenharbor/frozen-model")
+	assert.NotContains(t, byName, "tokenharbor/ruled-model")
+	assert.NotContains(t, byName, "opencode2api/deepseek-v4.1-flash")
+}
+
+// A model the gateway serves without a metadata record gets one from the
+// provider's own API, and /v1/models then reports it under the client name.
+func TestApplyCapabilitySyncItemCreatesRecord(t *testing.T) {
+	db := modelManagementDB(t, "sqlite", "")
+	require.NoError(t, db.Create(&model.Channel{Id: 1, Name: "th", Key: "k", Status: common.ChannelStatusEnabled,
+		Models: "deepseek-v4.1-flash:free", Group: "default", OtherSettings: `{"model_prefix":"tokenharbor"}`}).Error)
+	require.NoError(t, db.Create(&model.Model{ModelName: "deepseek-v4.1-flash:free", ContextLength: 1}).Error)
+
+	const name = "tokenharbor/deepseek-v4.1-flash:free"
+	items := planCapabilitySync(capabilitySyncState{
+		Index:    buildModelDevIndex(capabilityTestCatalog()),
+		Channels: []model.Channel{{Id: 1, Status: common.ChannelStatusEnabled, Models: "deepseek-v4.1-flash:free", OtherSettings: `{"model_prefix":"tokenharbor"}`}},
+		Upstream: map[string]upstreamModelMetadata{name: {ContextLength: 1048576, Reasoning: lo.ToPtr(true)}},
+	})
+	require.Len(t, items, 1)
+	changed, err := applyCapabilitySyncItem(items[0])
+	require.NoError(t, err)
+	assert.True(t, changed)
+
+	var stored model.Model
+	require.NoError(t, db.Where("model_name = ?", name).First(&stored).Error)
+	assert.Equal(t, 1048576, stored.ContextLength)
+	assert.True(t, stored.Reasoning)
+	assert.Equal(t, 1, stored.Status)
+	assert.Equal(t, 1, stored.SyncOfficial)
+
+	capabilities, err := model.GetModelCapabilitiesByNames([]string{name})
+	require.NoError(t, err)
+	assert.Equal(t, 1048576, capabilities[name].ContextLength)
 }

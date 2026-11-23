@@ -8,7 +8,7 @@ import (
 	"math/rand"
 	"net"
 	"net/http"
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -233,77 +233,170 @@ func matchProviderToVendor(provider, vendor string) bool {
 	return strings.EqualFold(provider, vendor)
 }
 
-// loadChannelModelMetadata asks each channel that serves a synced model for its
-// own metadata, so capability fields resolve from the provider that actually
-// serves the model instead of a third-party catalog. Channels are visited once
-// each and their results are cached for the whole sync; a provider that errors
-// is skipped so its models fall back to models.dev.
-func loadChannelModelMetadata(models []map[string]*model.Model) map[string]upstreamModelMetadata {
+// modelDevEntry is one catalog model together with the provider listing it.
+type modelDevEntry struct {
+	ProviderKey  string
+	ProviderName string
+	Model        modelDevModel
+}
+
+// modelDevIndex finds catalog models by their full ID and by the last ID
+// segment, so a gateway name such as "channel/vendor/model" still resolves.
+// Only leading segments are dropped: a suffix such as "-free", ":free" or
+// "-latest" is part of the model name and names a different catalog entry.
+type modelDevIndex struct {
+	byID   map[string][]modelDevEntry
+	byTail map[string][]modelDevEntry
+}
+
+func buildModelDevIndex(catalog *modelDevCatalog) modelDevIndex {
+	index := modelDevIndex{byID: map[string][]modelDevEntry{}, byTail: map[string][]modelDevEntry{}}
+	if catalog == nil {
+		return index
+	}
+	providerKeys := make([]string, 0, len(catalog.Providers))
+	for key := range catalog.Providers {
+		providerKeys = append(providerKeys, key)
+	}
+	slices.Sort(providerKeys)
+	for _, key := range providerKeys {
+		provider := catalog.Providers[key]
+		modelKeys := make([]string, 0, len(provider.Models))
+		for modelKey := range provider.Models {
+			modelKeys = append(modelKeys, modelKey)
+		}
+		slices.Sort(modelKeys)
+		for _, modelKey := range modelKeys {
+			devModel := provider.Models[modelKey]
+			if devModel.Id == "" {
+				devModel.Id = modelKey
+			}
+			entry := modelDevEntry{ProviderKey: key, ProviderName: provider.Name, Model: devModel}
+			id := strings.ToLower(devModel.Id)
+			index.byID[id] = append(index.byID[id], entry)
+			tail := id[strings.LastIndex(id, "/")+1:]
+			index.byTail[tail] = append(index.byTail[tail], entry)
+		}
+	}
+	return index
+}
+
+// lookup returns the catalog entry for a gateway model name. When several
+// providers list the model, a provider named in the gateway name wins, then
+// the provider matching the model's own vendor, then the most common context
+// size (the smaller one on a tie), so the choice never depends on map order.
+func (index modelDevIndex) lookup(name, vendor string) (modelDevEntry, bool) {
+	lower := strings.ToLower(strings.TrimSpace(name))
+	segments := strings.Split(lower, "/")
+	var candidates []modelDevEntry
+	for start := range segments {
+		if candidates = index.byID[strings.Join(segments[start:], "/")]; len(candidates) > 0 {
+			break
+		}
+	}
+	if len(candidates) == 0 {
+		candidates = index.byTail[segments[len(segments)-1]]
+	}
+	if len(candidates) == 0 {
+		return modelDevEntry{}, false
+	}
+	for _, candidate := range candidates {
+		if slices.Contains(segments[:len(segments)-1], strings.ToLower(candidate.ProviderKey)) {
+			return candidate, true
+		}
+	}
+	for _, candidate := range candidates {
+		if matchProviderToVendor(candidate.ProviderName, vendor) {
+			return candidate, true
+		}
+	}
+	counts := make(map[int]int, len(candidates))
+	for _, candidate := range candidates {
+		counts[candidate.Model.Limit.Context]++
+	}
+	best := candidates[0]
+	for _, candidate := range candidates[1:] {
+		count, bestCount := counts[candidate.Model.Limit.Context], counts[best.Model.Limit.Context]
+		if count > bestCount || (count == bestCount && candidate.Model.Limit.Context < best.Model.Limit.Context) {
+			best = candidate
+		}
+	}
+	return best, true
+}
+
+// channelClientModelName is the name clients use for a channel model: the
+// channel's model_prefix followed by the provider's own model name.
+func channelClientModelName(name, prefix string) string {
+	if prefix == "" {
+		return name
+	}
+	return prefix + "/" + strings.TrimPrefix(name, prefix+"/")
+}
+
+// loadChannelModelMetadata asks every enabled channel that serves a wanted
+// model for its own metadata, so capability fields resolve from the provider
+// that actually serves the model before any third-party catalog. A provider
+// that errors is skipped so its models fall back to models.dev. Results are
+// merged in channel ID order to keep the outcome stable between runs.
+func loadChannelModelMetadata(channels []model.Channel, wanted map[string]struct{}) map[string]upstreamModelMetadata {
+	results := make([]map[string]upstreamModelMetadata, len(channels))
+	slots := make(chan struct{}, 8)
+	var group sync.WaitGroup
+	for i := range channels {
+		channel := &channels[i]
+		if channel.Status != common.ChannelStatusEnabled || !channelServesAnyModel(channel, wanted) {
+			continue
+		}
+		group.Add(1)
+		go func() {
+			defer group.Done()
+			defer func() {
+				if recovered := recover(); recovered != nil {
+					logger.LogWarn(context.Background(), fmt.Sprintf("model metadata sync: channel %d metadata panicked: %v", channel.Id, recovered))
+				}
+			}()
+			slots <- struct{}{}
+			defer func() { <-slots }()
+			metadata, err := fetchChannelUpstreamModelMetadata(channel)
+			if err != nil {
+				logger.LogWarn(context.Background(), fmt.Sprintf(
+					"model metadata sync: channel %d metadata unavailable, falling back to models.dev: %s",
+					channel.Id, err.Error()))
+				return
+			}
+			results[i] = metadata
+		}()
+	}
+	group.Wait()
+
 	merged := make(map[string]upstreamModelMetadata)
-
-	var channels []model.Channel
-	if err := model.DB.Find(&channels).Error; err != nil {
-		logger.LogWarn(context.Background(), "model metadata sync: read channels failed: "+err.Error())
-		return merged
-	}
-
-	// A model name reaches a provider either bare or behind that channel's
-	// model_prefix, so index both spellings before matching.
-	wanted := make(map[string]struct{})
-	for _, byName := range models {
-		for name := range byName {
-			wanted[name] = struct{}{}
-		}
-	}
-
-	visited := make(map[string]struct{}, len(channels))
-	for _, channel := range channels {
-		if _, done := visited[fmt.Sprintf("%d", channel.Id)]; done {
-			continue
-		}
-		visited[fmt.Sprintf("%d", channel.Id)] = struct{}{}
-		if !channelServesAnyModel(&channel, wanted) {
-			continue
-		}
-
-		metadata, err := fetchChannelUpstreamModelMetadata(&channel)
-		if err != nil {
-			logger.LogWarn(context.Background(), fmt.Sprintf(
-				"model metadata sync: channel %d metadata unavailable, falling back to models.dev: %s",
-				channel.Id, err.Error()))
-			continue
-		}
-		mergeUpstreamModelMetadata(merged, metadata, model.ExtractModelPrefix(channel.OtherSettings))
+	for i := range channels {
+		mergeUpstreamModelMetadata(merged, results[i], model.ExtractModelPrefix(channels[i].OtherSettings))
 	}
 	return merged
 }
 
 // channelServesAnyModel reports whether the channel lists any model the sync is
-// about to touch, so a deployment does not query every provider on every run.
+// about to touch, so a deployment does not query a provider it has no use for.
 func channelServesAnyModel(channel *model.Channel, wanted map[string]struct{}) bool {
 	prefix := model.ExtractModelPrefix(channel.OtherSettings)
 	for _, name := range channel.GetModels() {
 		if _, exists := wanted[name]; exists {
 			return true
 		}
-		if prefix != "" {
-			if _, exists := wanted[prefix+"/"+name]; exists {
-				return true
-			}
+		if _, exists := wanted[channelClientModelName(name, prefix)]; exists {
+			return true
 		}
 	}
 	return false
 }
 
-// mergeUpstreamModelMetadata folds one channel's result into the shared map.
-// The first channel that reports a field for a model wins, so two providers
-// offering the same model cannot fight over it during one sync.
+// mergeUpstreamModelMetadata folds one channel's result into the shared map
+// under the name clients use. The first channel that reports a model wins, so
+// two providers offering the same model cannot fight over it during one sync.
 func mergeUpstreamModelMetadata(merged, metadata map[string]upstreamModelMetadata, prefix string) {
 	for name, entry := range metadata {
-		key := name
-		if prefix != "" {
-			key = prefix + "/" + name
-		}
+		key := channelClientModelName(name, prefix)
 		if _, exists := merged[key]; exists {
 			continue
 		}
@@ -311,133 +404,17 @@ func mergeUpstreamModelMetadata(merged, metadata map[string]upstreamModelMetadat
 	}
 }
 
-// SyncModelsDevPreview returns candidates with diffs from models.dev catalog.
-func SyncModelsDevPreview(c *gin.Context) {
-	catalog, version, err := fetchModelDevCatalog(c)
-	if err != nil {
-		common.ApiError(c, err)
-		return
-	}
-
-	var allModels []*model.Model
-	if err := model.DB.Find(&allModels).Error; err != nil {
-		common.ApiError(c, err)
-		return
-	}
-
-	var allVendors []*model.Vendor
-	if err := model.DB.Find(&allVendors).Error; err != nil {
-		common.ApiError(c, err)
-		return
-	}
-
-	vendorByName := make(map[string]*model.Vendor, len(allVendors))
-	for _, v := range allVendors {
-		vendorByName[strings.ToLower(v.Name)] = v
-	}
-
-	modelByName := make(map[string]*model.Model, len(allModels))
-	for _, m := range allModels {
-		modelByName[m.ModelName] = m
-	}
-
-	// Build a prefix-aware lookup: bare models.dev IDs → channel prefixed names.
-	// When a channel has model_prefix "deepseek", its models are stored as
-	// "deepseek/deepseek-flash" in the DB but models.dev catalog uses "deepseek-flash".
-	// We collect all channel prefixes and build a lookup that tries both variants.
-	var syncChannels []model.Channel
-	_ = model.DB.Select("settings").Find(&syncChannels)
-	channelPrefixSet := make(map[string]struct{})
-	for _, ch := range syncChannels {
-		if p := model.ExtractModelPrefix(ch.OtherSettings); p != "" {
-			channelPrefixSet[p+"/"] = struct{}{}
-		}
-	}
-
-	// resolveLocalModel looks up a models.dev bare ID in the model map,
-	// also trying each known channel prefix to find the prefixed DB entry.
-	resolveLocalModel := func(devID string) (*model.Model, bool) {
-		if local, ok := modelByName[devID]; ok {
-			return local, true
-		}
-		for prefix := range channelPrefixSet {
-			if prefixed, ok := modelByName[prefix+devID]; ok {
-				return prefixed, true
-			}
-		}
-		// Also try without namespace/vendor prefix if devID carries one (e.g. "openai/gpt-4o" -> "gpt-4o")
-		if _, bare, ok := strings.Cut(devID, "/"); ok && bare != "" {
-			if local, ok := modelByName[bare]; ok {
-				return local, true
-			}
-			for prefix := range channelPrefixSet {
-				if prefixed, ok := modelByName[prefix+bare]; ok {
-					return prefixed, true
-				}
-			}
-		}
-		return nil, false
-	}
-
-	candidates := make([]modelsDevSyncCandidate, 0)
-	upstreamMetadata := loadChannelModelMetadata([]map[string]*model.Model{modelByName})
-	for providerKey, provider := range catalog.Providers {
-		vendorFound := false
-		if _, ok := vendorByName[strings.ToLower(provider.Name)]; ok {
-			vendorFound = true
-		}
-
-		for _, devModel := range provider.Models {
-			local, modelFound := resolveLocalModel(devModel.Id)
-			if !modelFound {
-				continue
-			}
-
-			candidate := modelsDevSyncCandidate{
-				ModelName: devModel.Id,
-				Provider:  providerKey,
-				Kind:      "unchanged",
-				Fields:    []modelsDevSyncField{},
-			}
-
-			if !vendorFound {
-				candidate.Kind = "missing_vendor"
-				candidates = append(candidates, candidate)
-				continue
-			}
-
-			fields := buildModelDevCapabilityFields(local, devModel, upstreamMetadata[local.ModelName])
-			if len(fields) > 0 {
-				candidate.Kind = "update"
-				candidate.Fields = fields
-			}
-
-			candidates = append(candidates, candidate)
-		}
-	}
-
-	sort.Slice(candidates, func(i, j int) bool {
-		if candidates[i].Provider != candidates[j].Provider {
-			return candidates[i].Provider < candidates[j].Provider
-		}
-		return candidates[i].ModelName < candidates[j].ModelName
-	})
-
-	common.ApiSuccess(c, gin.H{
-		"source":     modelsDevSyncSource{URL: modelDevSyncURL, Version: version},
-		"candidates": candidates,
-	})
-}
-
 // modelCapabilitySource is the merged view of one model's capabilities: the
 // provider's own API first, then the models.dev catalog for whatever the
-// provider did not report. The provider is authoritative because it describes
-// the model this gateway actually serves; models.dev is a third-party catalog
-// that covers a model across every provider offering it.
+// provider did not report, and nothing when neither knows. The provider is
+// authoritative because it describes the model this gateway actually serves;
+// models.dev is a third-party catalog that covers a model across every
+// provider offering it.
 type modelCapabilitySource struct {
 	ContextLength   int
 	MaxOutputTokens int
 	Reasoning       bool
+	ReasoningKnown  bool
 	ToolCall        bool
 	ToolCallKnown   bool
 }
@@ -447,14 +424,23 @@ type modelCapabilitySource struct {
 // common case for OpenAI-compatible channels, leaves the whole capability set
 // to models.dev.
 func resolveModelCapability(provider upstreamModelMetadata, dev modelDevModel) modelCapabilitySource {
-	source := modelCapabilitySource{
-		ContextLength:   dev.Limit.Context,
-		MaxOutputTokens: dev.Limit.Output,
-		Reasoning:       dev.Reasoning,
-		ToolCall:        dev.ToolCall,
-		ToolCallKnown:   true,
-	}
+	return mergeModelCapability(provider, &dev)
+}
 
+// mergeModelCapability accepts a nil catalog model for names models.dev does
+// not list; the provider's own metadata is then the only source.
+func mergeModelCapability(provider upstreamModelMetadata, dev *modelDevModel) modelCapabilitySource {
+	source := modelCapabilitySource{}
+	if dev != nil {
+		source = modelCapabilitySource{
+			ContextLength:   dev.Limit.Context,
+			MaxOutputTokens: dev.Limit.Output,
+			Reasoning:       dev.Reasoning,
+			ReasoningKnown:  true,
+			ToolCall:        dev.ToolCall,
+			ToolCallKnown:   true,
+		}
+	}
 	if provider.ContextLength > 0 {
 		source.ContextLength = provider.ContextLength
 	}
@@ -462,43 +448,253 @@ func resolveModelCapability(provider upstreamModelMetadata, dev modelDevModel) m
 		source.MaxOutputTokens = provider.MaxOutputTokens
 	}
 	if provider.ToolCall != nil {
-		source.ToolCall = *provider.ToolCall
+		source.ToolCall, source.ToolCallKnown = *provider.ToolCall, true
+	}
+	if provider.Reasoning != nil {
+		source.Reasoning, source.ReasoningKnown = *provider.Reasoning, true
 	}
 	return source
 }
 
 // buildModelDevCapabilityFields returns field diffs between a local model and
-// the merged provider/catalog capabilities.
+// the merged provider/catalog capabilities, plus catalog pricing.
 func buildModelDevCapabilityFields(local *model.Model, dev modelDevModel, provider upstreamModelMetadata) []modelsDevSyncField {
-	var fields []modelsDevSyncField
-	capability := resolveModelCapability(provider, dev)
+	return capabilityDiff(local, resolveModelCapability(provider, dev), &dev)
+}
 
+// capabilityDiff lists the fields whose stored value differs from the merged
+// capability. pricing is nil when no catalog entry may set prices.
+func capabilityDiff(local *model.Model, capability modelCapabilitySource, pricing *modelDevModel) []modelsDevSyncField {
+	var fields []modelsDevSyncField
 	if capability.ContextLength > 0 && local.ContextLength != capability.ContextLength {
 		fields = append(fields, modelsDevSyncField{Field: "context_length", Local: local.ContextLength, Upstream: capability.ContextLength})
 	}
 	if capability.MaxOutputTokens > 0 && local.MaxOutputTokens != capability.MaxOutputTokens {
 		fields = append(fields, modelsDevSyncField{Field: "max_output_tokens", Local: local.MaxOutputTokens, Upstream: capability.MaxOutputTokens})
 	}
-	if local.Reasoning != capability.Reasoning {
+	if capability.ReasoningKnown && local.Reasoning != capability.Reasoning {
 		fields = append(fields, modelsDevSyncField{Field: "reasoning", Local: local.Reasoning, Upstream: capability.Reasoning})
 	}
 	if capability.ToolCallKnown && local.ToolCall != capability.ToolCall {
 		fields = append(fields, modelsDevSyncField{Field: "tool_call", Local: local.ToolCall, Upstream: capability.ToolCall})
 	}
-	if dev.Cost.Input > 0 && local.PricingInput != dev.Cost.Input {
-		fields = append(fields, modelsDevSyncField{Field: "pricing_input", Local: local.PricingInput, Upstream: dev.Cost.Input})
+	if pricing == nil {
+		return fields
 	}
-	if dev.Cost.Output > 0 && local.PricingOutput != dev.Cost.Output {
-		fields = append(fields, modelsDevSyncField{Field: "pricing_output", Local: local.PricingOutput, Upstream: dev.Cost.Output})
+	if pricing.Cost.Input > 0 && local.PricingInput != pricing.Cost.Input {
+		fields = append(fields, modelsDevSyncField{Field: "pricing_input", Local: local.PricingInput, Upstream: pricing.Cost.Input})
 	}
-	if dev.Cost.CacheRead > 0 && local.PricingCache != dev.Cost.CacheRead {
-		fields = append(fields, modelsDevSyncField{Field: "pricing_cache", Local: local.PricingCache, Upstream: dev.Cost.CacheRead})
+	if pricing.Cost.Output > 0 && local.PricingOutput != pricing.Cost.Output {
+		fields = append(fields, modelsDevSyncField{Field: "pricing_output", Local: local.PricingOutput, Upstream: pricing.Cost.Output})
 	}
-
+	if pricing.Cost.CacheRead > 0 && local.PricingCache != pricing.Cost.CacheRead {
+		fields = append(fields, modelsDevSyncField{Field: "pricing_cache", Local: local.PricingCache, Upstream: pricing.Cost.CacheRead})
+	}
 	return fields
 }
 
-// SyncModelsDevApply applies selected model capability updates from models.dev.
+// capabilitySyncState is everything one sync run reads before deciding.
+type capabilitySyncState struct {
+	Models   []*model.Model
+	Vendors  []*model.Vendor
+	Channels []model.Channel
+	Upstream map[string]upstreamModelMetadata
+	Index    modelDevIndex
+}
+
+// capabilitySyncItem is one model the sync would create or update.
+type capabilitySyncItem struct {
+	Candidate modelsDevSyncCandidate
+	Local     *model.Model   // nil when the record does not exist yet
+	Pricing   *modelDevModel // catalog entry allowed to set prices
+}
+
+// planCapabilitySync decides, for every model this gateway serves or keeps a
+// record for, what to store: the serving provider's own metadata first, then
+// models.dev, and nothing when neither knows the model. A model without a
+// record gets one, unless a name rule or a bare-name record already covers it.
+func planCapabilitySync(state capabilitySyncState) []capabilitySyncItem {
+	vendorNameByID := make(map[int]string, len(state.Vendors))
+	for _, vendor := range state.Vendors {
+		vendorNameByID[vendor.Id] = vendor.Name
+	}
+	exact := make(map[string]*model.Model, len(state.Models))
+	var rules []*model.Model
+	for _, record := range state.Models {
+		if record.NameRule == model.NameRuleExact {
+			exact[record.ModelName] = record
+			continue
+		}
+		rules = append(rules, record)
+	}
+
+	// served maps a client model name to its bare name ("" without a prefix).
+	served := make(map[string]string)
+	for i := range state.Channels {
+		if state.Channels[i].Status != common.ChannelStatusEnabled {
+			continue
+		}
+		prefix := model.ExtractModelPrefix(state.Channels[i].OtherSettings)
+		for _, name := range state.Channels[i].GetModels() {
+			if name = strings.TrimSpace(name); name == "" {
+				continue
+			}
+			client := channelClientModelName(name, prefix)
+			bare := ""
+			if client != name || prefix != "" {
+				bare = strings.TrimPrefix(client, prefix+"/")
+			}
+			served[client] = bare
+		}
+	}
+
+	names := make([]string, 0, len(exact)+len(served))
+	for name := range exact {
+		names = append(names, name)
+	}
+	for name := range served {
+		if _, exists := exact[name]; !exists {
+			names = append(names, name)
+		}
+	}
+	slices.Sort(names)
+
+	items := make([]capabilitySyncItem, 0)
+	for _, name := range names {
+		local := exact[name]
+		if local != nil && local.SyncOfficial == 0 {
+			// The administrator turned syncing off for this record.
+			continue
+		}
+		upstream, hasUpstream := state.Upstream[name]
+		hasUpstream = hasUpstream && upstream != (upstreamModelMetadata{})
+		vendor := ""
+		if local != nil {
+			vendor = vendorNameByID[local.VendorID]
+		}
+		entry, hasEntry := state.Index.lookup(name, vendor)
+		if !hasUpstream && !hasEntry {
+			continue
+		}
+		if local == nil {
+			if slices.ContainsFunc(rules, func(rule *model.Model) bool {
+				return rule.MatchesName(name) || (served[name] != "" && rule.MatchesName(served[name]))
+			}) {
+				continue
+			}
+			// models.dev describes the bare model, and the bare record already
+			// answers for every prefixed name; only the provider's own
+			// metadata is specific to this channel.
+			if bare, bareExists := exact[served[name]]; bareExists && (!hasUpstream || bare.SyncOfficial == 0) {
+				continue
+			}
+		}
+
+		item := capabilitySyncItem{Local: local, Candidate: modelsDevSyncCandidate{ModelName: name, Kind: "update"}}
+		var dev *modelDevModel
+		sources := make([]string, 0, 2)
+		if hasUpstream {
+			sources = append(sources, "api")
+		}
+		if hasEntry {
+			dev = &entry.Model
+			sources = append(sources, entry.ProviderKey)
+			// Prices only come from a catalog provider the site keeps as a vendor.
+			if slices.ContainsFunc(state.Vendors, func(v *model.Vendor) bool { return matchProviderToVendor(entry.ProviderName, v.Name) }) {
+				item.Pricing = dev
+			}
+		}
+		item.Candidate.Provider = strings.Join(sources, " + ")
+
+		current := local
+		if current == nil {
+			current = &model.Model{}
+			item.Candidate.Kind = "create"
+		}
+		item.Candidate.Fields = capabilityDiff(current, mergeModelCapability(upstream, dev), item.Pricing)
+		if len(item.Candidate.Fields) == 0 {
+			continue
+		}
+		items = append(items, item)
+	}
+	return items
+}
+
+// loadCapabilitySyncPlan reads the site state, asks the channels for their
+// own metadata and returns the resulting plan.
+func loadCapabilitySyncPlan(catalog *modelDevCatalog) ([]capabilitySyncItem, error) {
+	state := capabilitySyncState{Index: buildModelDevIndex(catalog)}
+	if err := model.DB.Find(&state.Models).Error; err != nil {
+		return nil, err
+	}
+	if err := model.DB.Find(&state.Vendors).Error; err != nil {
+		return nil, err
+	}
+	if err := model.DB.Order("id").Find(&state.Channels).Error; err != nil {
+		return nil, err
+	}
+	wanted := make(map[string]struct{}, len(state.Models))
+	for _, record := range state.Models {
+		wanted[record.ModelName] = struct{}{}
+	}
+	for i := range state.Channels {
+		prefix := model.ExtractModelPrefix(state.Channels[i].OtherSettings)
+		for _, name := range state.Channels[i].GetModels() {
+			wanted[channelClientModelName(strings.TrimSpace(name), prefix)] = struct{}{}
+		}
+	}
+	state.Upstream = loadChannelModelMetadata(state.Channels, wanted)
+	return planCapabilitySync(state), nil
+}
+
+// applyCapabilitySyncItem writes one planned change and reports whether the
+// database changed.
+func applyCapabilitySyncItem(item capabilitySyncItem) (bool, error) {
+	if len(item.Candidate.Fields) == 0 {
+		return false, nil
+	}
+	updates := make(map[string]any, len(item.Candidate.Fields)+1)
+	for _, field := range item.Candidate.Fields {
+		updates[field.Field] = field.Upstream
+	}
+	local := item.Local
+	if local == nil {
+		local = &model.Model{ModelName: item.Candidate.ModelName, Status: 1, SyncOfficial: 1, NameRule: model.NameRuleExact}
+		if err := local.Insert(); err != nil {
+			return false, err
+		}
+	}
+	updates["updated_time"] = common.GetTimestamp()
+	if err := model.DB.Model(&model.Model{}).Where("id = ?", local.Id).Updates(updates).Error; err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// SyncModelsDevPreview returns the models whose capabilities would change,
+// with the provider API as the first source and models.dev as the second.
+func SyncModelsDevPreview(c *gin.Context) {
+	catalog, version, err := fetchModelDevCatalog(c)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	items, err := loadCapabilitySyncPlan(catalog)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	candidates := make([]modelsDevSyncCandidate, 0, len(items))
+	for _, item := range items {
+		candidates = append(candidates, item.Candidate)
+	}
+	common.ApiSuccess(c, gin.H{
+		"source":     modelsDevSyncSource{URL: modelDevSyncURL, Version: version},
+		"candidates": candidates,
+	})
+}
+
+// SyncModelsDevApply applies the selected capability changes.
 func SyncModelsDevApply(c *gin.Context) {
 	var request struct {
 		SourceVersion string                   `json:"source_version"`
@@ -514,123 +710,62 @@ func SyncModelsDevApply(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-
 	if version != request.SourceVersion {
 		c.JSON(http.StatusConflict, gin.H{"success": false, "message": "Upstream catalog changed; preview again"})
 		return
 	}
-
-	var allModels []*model.Model
-	if err := model.DB.Find(&allModels).Error; err != nil {
+	items, err := loadCapabilitySyncPlan(catalog)
+	if err != nil {
 		common.ApiError(c, err)
 		return
 	}
-	var allVendors []*model.Vendor
-	if err := model.DB.Find(&allVendors).Error; err != nil {
-		common.ApiError(c, err)
-		return
-	}
-
-	vendorByName := make(map[string]*model.Vendor, len(allVendors))
-	for _, v := range allVendors {
-		vendorByName[strings.ToLower(v.Name)] = v
-	}
-	modelByName := make(map[string]*model.Model, len(allModels))
-	for _, m := range allModels {
-		modelByName[m.ModelName] = m
-	}
-
-	// Collect channel prefixes for prefix-aware model lookup (same as preview).
-	var syncChannels []model.Channel
-	_ = model.DB.Select("settings").Find(&syncChannels)
-	channelPrefixSet := make(map[string]struct{})
-	for _, ch := range syncChannels {
-		if p := model.ExtractModelPrefix(ch.OtherSettings); p != "" {
-			channelPrefixSet[p+"/"] = struct{}{}
-		}
-	}
-
-	updatedCount := 0
-	upstreamMetadata := loadChannelModelMetadata([]map[string]*model.Model{modelByName})
+	selected := make(map[string]struct{}, len(request.Selections))
 	for _, selection := range request.Selections {
-		provider, providerExists := catalog.Providers[selection.Provider]
-		if !providerExists {
-			continue
-		}
-		devModel, modelExists := provider.Models[selection.ModelName]
-		if !modelExists {
-			continue
-		}
-		local, localExists := modelByName[selection.ModelName]
-		if !localExists {
-			// Try with channel prefix stripped (models.dev bare ID + prefix = DB name).
-			for prefix := range channelPrefixSet {
-				if prefixed, ok := modelByName[prefix+selection.ModelName]; ok {
-					local = prefixed
-					localExists = true
-					break
-				}
-			}
-		}
-		if !localExists {
-			continue
-		}
-
-		if _, vendorExists := vendorByName[strings.ToLower(provider.Name)]; !vendorExists {
-			continue
-		}
-
-		capability := resolveModelCapability(upstreamMetadata[local.ModelName], devModel)
-		updates := map[string]any{}
-		if capability.ContextLength > 0 && local.ContextLength != capability.ContextLength {
-			updates["context_length"] = capability.ContextLength
-		}
-		if capability.MaxOutputTokens > 0 && local.MaxOutputTokens != capability.MaxOutputTokens {
-			updates["max_output_tokens"] = capability.MaxOutputTokens
-		}
-		if local.Reasoning != capability.Reasoning {
-			updates["reasoning"] = capability.Reasoning
-		}
-		if capability.ToolCallKnown && local.ToolCall != capability.ToolCall {
-			updates["tool_call"] = capability.ToolCall
-		}
-		if devModel.Cost.Input > 0 && local.PricingInput != devModel.Cost.Input {
-			updates["pricing_input"] = devModel.Cost.Input
-		}
-		if devModel.Cost.Output > 0 && local.PricingOutput != devModel.Cost.Output {
-			updates["pricing_output"] = devModel.Cost.Output
-		}
-		if devModel.Cost.CacheRead > 0 && local.PricingCache != devModel.Cost.CacheRead {
-			updates["pricing_cache"] = devModel.Cost.CacheRead
-		}
-
-		if len(updates) > 0 {
-			updates["updated_time"] = common.GetTimestamp()
-			if err := model.DB.Model(&model.Model{}).Where("id = ?", local.Id).Updates(updates).Error; err != nil {
-				common.ApiError(c, err)
-				return
-			}
-			updatedCount++
-
-			// Update runtime pricing maps from models.dev cost data.
-			// Cost values are $/1M tokens; ratio unit is $0.002/1K tokens (= $2/1M tokens).
-			if devModel.Cost.Input > 0 {
-				ratio_setting.UpdateSingleModelRatio(devModel.Id, devModel.Cost.Input/2.0)
-			}
-			if devModel.Cost.Output > 0 && devModel.Cost.Input > 0 {
-				ratio_setting.UpdateSingleCompletionRatio(devModel.Id, devModel.Cost.Output/devModel.Cost.Input)
-			}
-			if devModel.Cost.CacheRead > 0 && devModel.Cost.Input > 0 {
-				ratio_setting.UpdateSingleCacheRatio(devModel.Id, devModel.Cost.CacheRead/devModel.Cost.Input)
-			}
-		}
+		selected[selection.ModelName] = struct{}{}
 	}
 
-	recordManageAudit(c, "model.models_dev.sync", map[string]any{"updated_count": updatedCount})
+	updatedCount, createdCount := 0, 0
+	for _, item := range items {
+		if _, ok := selected[item.Candidate.ModelName]; !ok {
+			continue
+		}
+		changed, err := applyCapabilitySyncItem(item)
+		if err != nil {
+			common.ApiError(c, err)
+			return
+		}
+		if !changed {
+			continue
+		}
+		updatedCount++
+		if item.Local == nil {
+			createdCount++
+		}
+		if item.Pricing == nil {
+			continue
+		}
+		// Update runtime pricing maps from models.dev cost data.
+		// Cost values are $/1M tokens; ratio unit is $0.002/1K tokens (= $2/1M tokens).
+		cost := item.Pricing.Cost
+		if cost.Input > 0 {
+			ratio_setting.UpdateSingleModelRatio(item.Pricing.Id, cost.Input/2.0)
+		}
+		if cost.Output > 0 && cost.Input > 0 {
+			ratio_setting.UpdateSingleCompletionRatio(item.Pricing.Id, cost.Output/cost.Input)
+		}
+		if cost.CacheRead > 0 && cost.Input > 0 {
+			ratio_setting.UpdateSingleCacheRatio(item.Pricing.Id, cost.CacheRead/cost.Input)
+		}
+	}
+	if createdCount > 0 {
+		model.RefreshPricing()
+	}
+
+	recordManageAudit(c, "model.models_dev.sync", map[string]any{"updated_count": updatedCount, "created_count": createdCount})
 	common.ApiSuccess(c, gin.H{"updated_count": updatedCount})
 }
 
-// modelDevSyncHandler runs the periodic models.dev catalog sync job.
+// modelDevSyncHandler runs the periodic capability sync job.
 type modelDevSyncHandler struct{}
 
 func (modelDevSyncHandler) Type() string  { return model.SystemTaskTypeModelDevSync }
@@ -642,80 +777,38 @@ func (modelDevSyncHandler) Interval() time.Duration {
 func (modelDevSyncHandler) NewPayload() any { return nil }
 
 func (h modelDevSyncHandler) Run(ctx context.Context, task *model.SystemTask, runnerID string) {
-	catalog, _, err := fetchModelDevCatalogWithContext(ctx)
+	// The provider API is the first source, so a models.dev outage must not
+	// stop the run: it only removes the fallback.
+	catalog, _, catalogErr := fetchModelDevCatalogWithContext(ctx)
+	if catalogErr != nil {
+		logger.LogWarn(ctx, "model_dev_sync: models.dev unavailable, using provider metadata only: "+catalogErr.Error())
+	}
+	items, err := loadCapabilitySyncPlan(catalog)
 	if err != nil {
 		finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusFailed, nil, err)
 		return
 	}
 
-	var allModels []*model.Model
-	if err := model.DB.Find(&allModels).Error; err != nil {
-		finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusFailed, nil, err)
-		return
-	}
-	var allVendors []*model.Vendor
-	if err := model.DB.Find(&allVendors).Error; err != nil {
-		finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusFailed, nil, err)
-		return
-	}
-
-	vendorByName := make(map[string]*model.Vendor, len(allVendors))
-	for _, v := range allVendors {
-		vendorByName[strings.ToLower(v.Name)] = v
-	}
-	modelByName := make(map[string]*model.Model, len(allModels))
-	for _, m := range allModels {
-		modelByName[m.ModelName] = m
-	}
-
-	updatedCount := 0
-	upstreamMetadata := loadChannelModelMetadata([]map[string]*model.Model{modelByName})
-	for _, provider := range catalog.Providers {
-		if _, vendorExists := vendorByName[strings.ToLower(provider.Name)]; !vendorExists {
+	updatedCount, createdCount := 0, 0
+	for _, item := range items {
+		changed, err := applyCapabilitySyncItem(item)
+		if err != nil {
+			logger.LogWarn(ctx, fmt.Sprintf("model_dev_sync: update %s failed: %v", item.Candidate.ModelName, err))
 			continue
 		}
-		for _, devModel := range provider.Models {
-			local, modelExists := modelByName[devModel.Id]
-			if !modelExists {
-				continue
-			}
-
-			capability := resolveModelCapability(upstreamMetadata[local.ModelName], devModel)
-			updates := map[string]any{}
-			if capability.ContextLength > 0 && local.ContextLength != capability.ContextLength {
-				updates["context_length"] = capability.ContextLength
-			}
-			if capability.MaxOutputTokens > 0 && local.MaxOutputTokens != capability.MaxOutputTokens {
-				updates["max_output_tokens"] = capability.MaxOutputTokens
-			}
-			if local.Reasoning != capability.Reasoning {
-				updates["reasoning"] = capability.Reasoning
-			}
-			if capability.ToolCallKnown && local.ToolCall != capability.ToolCall {
-				updates["tool_call"] = capability.ToolCall
-			}
-			if devModel.Cost.Input > 0 && local.PricingInput != devModel.Cost.Input {
-				updates["pricing_input"] = devModel.Cost.Input
-			}
-			if devModel.Cost.Output > 0 && local.PricingOutput != devModel.Cost.Output {
-				updates["pricing_output"] = devModel.Cost.Output
-			}
-			if devModel.Cost.CacheRead > 0 && local.PricingCache != devModel.Cost.CacheRead {
-				updates["pricing_cache"] = devModel.Cost.CacheRead
-			}
-
-			if len(updates) > 0 {
-				updates["updated_time"] = common.GetTimestamp()
-				if err := model.DB.Model(&model.Model{}).Where("id = ?", local.Id).Updates(updates).Error; err != nil {
-					logger.LogWarn(ctx, fmt.Sprintf("model_dev_sync: update %s failed: %v", devModel.Id, err))
-					continue
-				}
-				updatedCount++
-			}
+		if !changed {
+			continue
+		}
+		updatedCount++
+		if item.Local == nil {
+			createdCount++
 		}
 	}
+	if createdCount > 0 {
+		model.RefreshPricing()
+	}
 
-	result := map[string]any{"updated_count": updatedCount}
+	result := map[string]any{"updated_count": updatedCount, "created_count": createdCount}
 	finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusSucceeded, result, nil)
 }
 
