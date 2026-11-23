@@ -212,9 +212,24 @@ export function MultiKeyManageDialog({
               failed: response.failed,
             })}`
           : ''
+      const outcome: string[] = []
+      if (response.disabled && response.disabled > 0) {
+        outcome.push(
+          t('{{count}} failed key(s) disabled', { count: response.disabled })
+        )
+      }
+      if (response.auto_ban_off) {
+        outcome.push(
+          t('Failed keys were kept: auto-disable is off for this channel')
+        )
+      }
+      const description = [...outcome, ...(response.errors ?? [])].join('\n')
+      const toastOptions = description
+        ? { description, duration: 10000 }
+        : undefined
 
       if (response.success) {
-        toast.success(t('All keys test completed') + summary)
+        toast.success(t('All keys test completed') + summary, toastOptions)
       } else {
         // Build detailed error message
         let errorMsg = response.message || t('Test failed')
@@ -230,7 +245,7 @@ export function MultiKeyManageDialog({
           errorMsg += ` [${details.join(', ')}]`
         }
         errorMsg += summary
-        toast.error(errorMsg)
+        toast.error(errorMsg, toastOptions)
       }
 
       // Always refresh state after test (including partial failures that may auto-disable keys)

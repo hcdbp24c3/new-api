@@ -115,6 +115,8 @@
     "{{selected}} of {{total}} changed fields selected": "{{selected}} of {{total}} changed fields selected",
     "{{start}}–{{end}}": "{{start}}–{{end}}",
     "{{success}} succeeded, {{failed}} failed": "{{success}} succeeded, {{failed}} failed",
+    "{{count}} failed key(s) disabled": "{{count}} failed key(s) disabled",
+    "Failed keys were kept: auto-disable is off for this channel": "Failed keys were kept: auto-disable is off for this channel",
     "{{synced}}/{{total}} nodes updated": "{{synced}}/{{total}} nodes updated",
     "{{target}} test failed": "{{target}} test failed",
     "{{target}} test succeeded": "{{target}} test succeeded",

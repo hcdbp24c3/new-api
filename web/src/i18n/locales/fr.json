@@ -115,6 +115,8 @@
     "{{selected}} of {{total}} changed fields selected": "{{selected}} / {{total}} champs modifiés sélectionnés",
     "{{start}}–{{end}}": "{{start}}–{{end}}",
     "{{success}} succeeded, {{failed}} failed": "{{success}} réussi(s), {{failed}} échoué(s)",
+    "{{count}} failed key(s) disabled": "{{count}} clé(s) en échec désactivée(s)",
+    "Failed keys were kept: auto-disable is off for this channel": "Clés en échec conservées : la désactivation automatique est désactivée pour ce canal",
     "{{synced}}/{{total}} nodes updated": "{{synced}}/{{total}} nœuds mis à jour",
     "{{target}} test failed": "Échec du test de {{target}}",
     "{{target}} test succeeded": "Test de {{target}} réussi",

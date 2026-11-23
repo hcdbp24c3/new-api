@@ -255,6 +255,10 @@ export interface ChannelTestResponse {
   failed?: number
   disabled?: number
   enabled?: number
+  // First few key failures, as "#<key number>: <error>"
+  errors?: string[]
+  // Failed keys were kept because the channel has auto-disable turned off
+  auto_ban_off?: boolean
 }
 
 export interface ChannelBalanceResponse {

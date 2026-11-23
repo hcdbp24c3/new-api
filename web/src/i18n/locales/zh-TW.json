@@ -115,6 +115,8 @@
     "{{selected}} of {{total}} changed fields selected": "已勾選 {{selected}} / {{total}} 個變更欄位",
     "{{start}}–{{end}}": "{{start}}至{{end}}",
     "{{success}} succeeded, {{failed}} failed": "{{success}} 個成功，{{failed}} 個失敗",
+    "{{count}} failed key(s) disabled": "已停用 {{count}} 個失敗的金鑰",
+    "Failed keys were kept: auto-disable is off for this channel": "失敗的金鑰未被停用：此渠道已關閉自動停用",
     "{{synced}}/{{total}} nodes updated": "{{synced}}/{{total}} 個節點已更新",
     "{{target}} test failed": "{{target}} 測試失敗",
     "{{target}} test succeeded": "{{target}} 測試成功",
