@@ -416,6 +416,7 @@ func SetApiRouter(router *gin.Engine) {
 			modelsRoute.POST("/sync_upstream", controller.SyncUpstreamModels)
 			modelsRoute.GET("/model_dev_sync/preview", controller.SyncModelsDevPreview)
 			modelsRoute.POST("/model_dev_sync/apply", controller.SyncModelsDevApply)
+			modelsRoute.POST("/model_dev_sync/run", controller.SyncModelsDevRun)
 			modelsRoute.POST("/delete", controller.BatchDeleteModelMeta)
 			modelsRoute.GET("/missing", controller.GetMissingModels)
 			modelsRoute.GET("/", controller.GetAllModelsMeta)

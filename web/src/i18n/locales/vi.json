@@ -6435,6 +6435,8 @@
     "Sync models": "Đồng bộ mô hình",
     "Sync Now": "Đồng bộ ngay",
     "Sync policy": "Chính sách đồng bộ",
+    "Capability sync failed": "Đồng bộ thông số model thất bại",
+    "Updated capabilities of {{count}} models from provider APIs and models.dev": "Đã cập nhật thông số của {{count}} model từ API nhà cung cấp và models.dev",
     "Sync pricing": "Đồng bộ giá",
     "Sync results": "Kết quả đồng bộ",
     "Sync scope": "Phạm vi đồng bộ",

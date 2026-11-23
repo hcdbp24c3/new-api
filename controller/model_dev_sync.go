@@ -800,6 +800,18 @@ func (modelDevSyncHandler) Interval() time.Duration {
 func (modelDevSyncHandler) NewPayload() any { return nil }
 
 func (h modelDevSyncHandler) Run(ctx context.Context, task *model.SystemTask, runnerID string) {
+	updatedCount, createdCount, err := runCapabilitySync(ctx)
+	if err != nil {
+		finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusFailed, nil, err)
+		return
+	}
+	result := map[string]any{"updated_count": updatedCount, "created_count": createdCount}
+	finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusSucceeded, result, nil)
+}
+
+// runCapabilitySync resolves every model's capabilities from the provider API,
+// then models.dev, and writes whatever changed.
+func runCapabilitySync(ctx context.Context) (updatedCount, createdCount int, err error) {
 	// The provider API is the first source, so a models.dev outage must not
 	// stop the run: it only removes the fallback.
 	catalog, _, catalogErr := fetchModelDevCatalogWithContext(ctx)
@@ -808,11 +820,8 @@ func (h modelDevSyncHandler) Run(ctx context.Context, task *model.SystemTask, ru
 	}
 	items, err := loadCapabilitySyncPlan(catalog)
 	if err != nil {
-		finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusFailed, nil, err)
-		return
+		return 0, 0, err
 	}
-
-	updatedCount, createdCount := 0, 0
 	for _, item := range items {
 		changed, err := applyCapabilitySyncItem(item)
 		if err != nil {
@@ -830,9 +839,29 @@ func (h modelDevSyncHandler) Run(ctx context.Context, task *model.SystemTask, ru
 	if createdCount > 0 {
 		model.RefreshPricing()
 	}
+	return updatedCount, createdCount, nil
+}
 
-	result := map[string]any{"updated_count": updatedCount, "created_count": createdCount}
-	finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusSucceeded, result, nil)
+// capabilitySyncRun keeps manual runs from overlapping: each one queries every
+// channel's provider.
+var capabilitySyncRun sync.Mutex
+
+// SyncModelsDevRun refreshes model capabilities right away. The metadata sync
+// wizard calls it so one action covers both the official metadata and the
+// capabilities reported by the providers.
+func SyncModelsDevRun(c *gin.Context) {
+	if !capabilitySyncRun.TryLock() {
+		c.JSON(http.StatusConflict, gin.H{"success": false, "message": "Capability sync is already running"})
+		return
+	}
+	defer capabilitySyncRun.Unlock()
+	updatedCount, createdCount, err := runCapabilitySync(c.Request.Context())
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	recordManageAudit(c, "model.models_dev.sync", map[string]any{"updated_count": updatedCount, "created_count": createdCount})
+	common.ApiSuccess(c, gin.H{"updated_count": updatedCount, "created_count": createdCount})
 }
 
 func init() {

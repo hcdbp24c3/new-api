@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 
 import { StaticDataTable } from '@/components/data-table'
 import { Dialog } from '@/components/dialog'
@@ -40,7 +41,11 @@ import {
 import { handleServerError } from '@/lib/handle-server-error'
 import { createServerError } from '@/lib/server-error-message'
 
-import { previewUpstreamDiff, syncUpstream } from '../../api'
+import {
+  previewUpstreamDiff,
+  runCapabilitySync,
+  syncUpstream,
+} from '../../api'
 import { getSyncLocaleOptions } from '../../constants'
 import type {
   MetadataSyncCandidate,
@@ -95,6 +100,30 @@ export function SyncWizardDialog(props: {
   const [selection, setSelection] = useState<
     Record<string, MetadataSyncField[]>
   >({})
+  const capabilities = useMutation({
+    mutationFn: async () => {
+      const response = await runCapabilitySync()
+      if (!response.success || !response.data) {
+        throw createServerError(response, t('Capability sync failed'))
+      }
+      return response.data
+    },
+    onSuccess: async (data) => {
+      if (!data.updated_count) return
+      toast.success(
+        t('Updated capabilities of {{count}} models from provider APIs and models.dev', {
+          count: data.updated_count,
+        })
+      )
+      await Promise.all(
+        ['models', 'pricing'].map((key) =>
+          queryClient.invalidateQueries({ queryKey: [key] })
+        )
+      )
+    },
+    onError: (error) => handleServerError(error),
+  })
+
   const load = useMutation({
     onMutate: () => {
       setPreview(null)
@@ -111,6 +140,9 @@ export function SyncWizardDialog(props: {
     },
     onSuccess: (data) => {
       setPreview(data)
+      // The official catalog carries no context window or capability flags;
+      // those come from each provider's API, then models.dev.
+      capabilities.mutate()
     },
     onError: (error) => handleServerError(error),
   })

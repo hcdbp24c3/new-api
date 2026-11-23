@@ -6435,6 +6435,8 @@
     "Sync models": "Синхронизировать модели",
     "Sync Now": "Синхронизировать сейчас",
     "Sync policy": "Политика синхронизации",
+    "Capability sync failed": "Capability sync failed",
+    "Updated capabilities of {{count}} models from provider APIs and models.dev": "Updated capabilities of {{count}} models from provider APIs and models.dev",
     "Sync pricing": "Синхронизировать цены",
     "Sync results": "Результаты синхронизации",
     "Sync scope": "Область синхронизации",

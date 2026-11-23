@@ -6435,6 +6435,8 @@
     "Sync models": "Synchroniser les modèles",
     "Sync Now": "Synchroniser maintenant",
     "Sync policy": "Politique de synchronisation",
+    "Capability sync failed": "Capability sync failed",
+    "Updated capabilities of {{count}} models from provider APIs and models.dev": "Updated capabilities of {{count}} models from provider APIs and models.dev",
     "Sync pricing": "Synchroniser les tarifs",
     "Sync results": "Résultats de synchronisation",
     "Sync scope": "Périmètre de synchronisation",

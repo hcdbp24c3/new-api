@@ -6435,6 +6435,8 @@
     "Sync models": "Sync models",
     "Sync Now": "Sync Now",
     "Sync policy": "Sync policy",
+    "Capability sync failed": "Capability sync failed",
+    "Updated capabilities of {{count}} models from provider APIs and models.dev": "Updated capabilities of {{count}} models from provider APIs and models.dev",
     "Sync pricing": "Sync pricing",
     "Sync results": "Sync results",
     "Sync scope": "Sync scope",

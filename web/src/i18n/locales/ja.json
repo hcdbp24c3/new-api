@@ -6435,6 +6435,8 @@
     "Sync models": "モデルを同期",
     "Sync Now": "今すぐ同期",
     "Sync policy": "同期ポリシー",
+    "Capability sync failed": "Capability sync failed",
+    "Updated capabilities of {{count}} models from provider APIs and models.dev": "Updated capabilities of {{count}} models from provider APIs and models.dev",
     "Sync pricing": "料金を同期",
     "Sync results": "同期結果",
     "Sync scope": "同期範囲",
