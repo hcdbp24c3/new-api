@@ -394,7 +394,9 @@ func newResponsesWSBillingTest(t *testing.T, expression string, handle func(*web
 	modelMapping := `{"ws-billing":"gpt-4o"}`
 	channel.ModelMapping = &modelMapping
 	channel.SetSetting(dto.ChannelSettings{ResponsesWebSocketEnabled: true})
-	channel.SetOtherSettings(dto.ChannelOtherSettings{AllowServiceTier: true})
+	// These fixtures exercise a native Responses upstream; an untagged channel
+	// would be converted to chat completions.
+	channel.SetOtherSettings(dto.ChannelOtherSettings{AllowServiceTier: true, UpstreamApiType: dto.ChannelApiTypeResponses})
 	require.NoError(t, model.DB.Create(channel).Error)
 	fixture.channel = channel
 	require.NoError(t, model.DB.Create(&model.Ability{ChannelId: channel.Id, Model: "ws-billing", Group: "default", Enabled: true}).Error)
@@ -690,6 +692,7 @@ func TestResponsesWebSocketDialsNativeResponsesChannelTypes(t *testing.T) {
 				w.Header().Set("Content-Type", "text/event-stream")
 				_, _ = fmt.Fprintf(w, "data: %s\n\ndata: [DONE]\n\n", terminal)
 			}
+			tc.otherSettings.UpstreamApiType = dto.ChannelApiTypeResponses
 			fixture.channel.SetOtherSettings(tc.otherSettings)
 			require.NoError(t, model.DB.Model(fixture.channel).Updates(map[string]any{"type": tc.channelType, "settings": fixture.channel.OtherSettings}).Error)
 
