@@ -371,7 +371,9 @@ func loadChannelModelMetadata(channels []model.Channel, wanted map[string]struct
 
 	merged := make(map[string]upstreamModelMetadata)
 	for i := range channels {
-		mergeUpstreamModelMetadata(merged, results[i], model.ExtractModelPrefix(channels[i].OtherSettings))
+		prefix := model.ExtractModelPrefix(channels[i].OtherSettings)
+		mergeUpstreamModelMetadata(merged, mappedUpstreamModelMetadata(&channels[i], results[i]), prefix)
+		mergeUpstreamModelMetadata(merged, results[i], prefix)
 	}
 	return merged
 }
@@ -389,6 +391,27 @@ func channelServesAnyModel(channel *model.Channel, wanted map[string]struct{}) b
 		}
 	}
 	return false
+}
+
+// mappedUpstreamModelMetadata returns the provider's metadata under the names
+// the channel's model mapping exposes: a channel that serves "alias" by sending
+// "real-model" upstream describes "alias" with the metadata of "real-model".
+func mappedUpstreamModelMetadata(channel *model.Channel, metadata map[string]upstreamModelMetadata) map[string]upstreamModelMetadata {
+	raw := strings.TrimSpace(channel.GetModelMapping())
+	if raw == "" || raw == "{}" || len(metadata) == 0 {
+		return nil
+	}
+	var mapping map[string]string
+	if err := common.UnmarshalJsonStr(raw, &mapping); err != nil {
+		return nil
+	}
+	mapped := make(map[string]upstreamModelMetadata, len(mapping))
+	for alias, target := range mapping {
+		if entry, exists := metadata[strings.TrimSpace(target)]; exists {
+			mapped[strings.TrimSpace(alias)] = entry
+		}
+	}
+	return mapped
 }
 
 // mergeUpstreamModelMetadata folds one channel's result into the shared map
