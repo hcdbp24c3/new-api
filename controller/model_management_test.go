@@ -960,6 +960,10 @@ export function parseTaskResult() { return {}; }
 				blocked := &model.Model{ModelName: "matrix-blocked", Status: 1, SyncOfficial: 0}
 				require.NoError(t, blocked.Insert())
 				require.NoError(t, db.Create(&model.Ability{Model: "matrix-new", Group: "default", ChannelId: 1, Enabled: true}).Error)
+				// A model counts as served by this site when a channel is configured with it.
+				serving := model.Channel{Name: "Matrix serving", Type: 1, Key: "fixture", Models: "matrix-new", Group: "default", Status: common.ChannelStatusEnabled}
+				require.NoError(t, db.Create(&serving).Error)
+				defer func() { require.NoError(t, db.Delete(&model.Channel{}, serving.Id).Error) }()
 				var revision atomic.Int32
 				var failVendors atomic.Bool
 				upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

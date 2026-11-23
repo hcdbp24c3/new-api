@@ -83,7 +83,12 @@ func initDefaultVendorMapping(metaMap map[string]*Model, vendorMap map[int]*Vend
 	})
 	for _, ability := range enableAbilities {
 		modelName := ability.Model
-		if _, exists := metaMap[modelName]; exists {
+		existing, exists := metaMap[modelName]
+		// A record with its own vendor, or one shared by several models through
+		// a name rule, is left as the administrator wrote it. An exact record
+		// without a vendor (for example one created by the capability sync)
+		// still gets the default vendor for display.
+		if exists && (existing.VendorID != 0 || existing.NameRule != NameRuleExact) {
 			continue
 		}
 
@@ -96,6 +101,15 @@ func initDefaultVendorMapping(metaMap map[string]*Model, vendorMap map[int]*Vend
 				vendorID = getDisplayVendor(vendorName, vendorMap)
 				break
 			}
+		}
+
+		if exists {
+			if vendorID != 0 {
+				withVendor := *existing
+				withVendor.VendorID = vendorID
+				metaMap[modelName] = &withVendor
+			}
+			continue
 		}
 
 		// 创建模型元数据

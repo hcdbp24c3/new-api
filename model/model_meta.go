@@ -390,8 +390,13 @@ func DeleteModelMetadata(ids []int, removeFromChannels, removePricing bool) (Mod
 	if err != nil {
 		return ModelDeleteResult{}, err
 	}
+	if removePricing {
+		// The other path bumps in metadataTransaction.
+		BumpSyncTopic(SyncTopicModels)
+	}
 	if result.UpdatedChannels > 0 {
 		InitChannelCache()
+		BumpSyncTopic(SyncTopicChannels)
 	}
 	RefreshPricing()
 	return result, nil
@@ -637,7 +642,11 @@ func GetModelCapabilitiesByNames(names []string) (map[string]ModelCapabilities, 
 		}
 	}
 
+	// A record named exactly like the requested model describes that model on
+	// its own channel, so it wins over a bare-name record reached by stripping
+	// a channel prefix.
 	result := make(map[string]ModelCapabilities, len(models))
+	exact := make(map[string]struct{}, len(models))
 	for i := range models {
 		caps := ModelCapabilities{
 			ContextLength:   models[i].ContextLength,
@@ -645,13 +654,20 @@ func GetModelCapabilitiesByNames(names []string) (map[string]ModelCapabilities, 
 			Reasoning:       models[i].Reasoning,
 			ToolCall:        models[i].ToolCall,
 		}
-		// Map back to all original (possibly prefixed) names.
-		if originals, ok := bareToOriginals[models[i].ModelName]; ok {
-			for _, orig := range originals {
+		originals, ok := bareToOriginals[models[i].ModelName]
+		if !ok {
+			result[models[i].ModelName] = caps
+			continue
+		}
+		for _, orig := range originals {
+			if orig == models[i].ModelName {
+				result[orig] = caps
+				exact[orig] = struct{}{}
+				continue
+			}
+			if _, taken := exact[orig]; !taken {
 				result[orig] = caps
 			}
-		} else {
-			result[models[i].ModelName] = caps
 		}
 	}
 	return result, nil

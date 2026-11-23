@@ -3,6 +3,7 @@ package controller
 import (
 	"fmt"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -15,14 +16,15 @@ import (
 )
 
 // upstreamModelMetadata is what a provider's own API reported for one model.
-// Every field is optional: a zero value means the provider did not supply it,
-// so the metadata sync falls back to the models.dev catalog for that field
-// instead of writing a zero over a known-good value.
+// Every field is optional: a zero value or nil pointer means the provider did
+// not supply it, so the metadata sync falls back to the models.dev catalog for
+// that field instead of writing a zero over a known-good value.
 type upstreamModelMetadata struct {
 	Description     string
 	ContextLength   int
 	MaxOutputTokens int
 	ToolCall        *bool
+	Reasoning       *bool
 }
 
 // fetchChannelUpstreamModelMetadata reads per-model metadata from the
@@ -83,6 +85,10 @@ func openAIChannelModelMetadata(items []OpenAIModel) map[string]upstreamModelMet
 	return openAIRawChannelModelMetadata(rawItems)
 }
 
+// openAIRawChannelModelMetadata reads the metadata shapes OpenAI-compatible
+// gateways attach to their model list: flat fields (new-api, Token Harbor),
+// OpenRouter's top_provider and supported_parameters, LiteLLM's model_info,
+// a models.dev-style limit object and capability maps or lists.
 func openAIRawChannelModelMetadata(items []map[string]any) map[string]upstreamModelMetadata {
 	metadata := make(map[string]upstreamModelMetadata, len(items))
 	for _, item := range items {
@@ -90,47 +96,51 @@ func openAIRawChannelModelMetadata(items []map[string]any) map[string]upstreamMo
 		if id == "" {
 			continue
 		}
-		// Search both root level and nested metadata map
-		var metaMap map[string]any
-		if nested, ok := item["metadata"].(map[string]any); ok {
-			metaMap = nested
-		}
-		getContextLength := func() int {
-			if v := positiveMetadataInt(item, "context_length", "contextLength", "max_context_length", "max_input_tokens"); v > 0 {
-				return v
-			}
-			return positiveMetadataInt(metaMap, "context_length", "contextLength", "max_context_length", "max_input_tokens")
-		}
-		getMaxOutputTokens := func() int {
-			if v := positiveMetadataInt(item, "max_output_tokens", "maxOutputTokens", "max_tokens"); v > 0 {
-				return v
-			}
-			return positiveMetadataInt(metaMap, "max_output_tokens", "maxOutputTokens", "max_tokens")
-		}
-		getDescription := func() string {
-			if d, ok := metadataString(item, "description"); ok {
-				return d
-			}
-			if d, ok := metadataString(metaMap, "description"); ok {
-				return d
-			}
-			return ""
-		}
-		getToolCall := func() *bool {
-			if tc, ok := metadataBool(item, "tool_call", "toolCall", "supports_tools", "supportsTools"); ok {
-				return lo.ToPtr(tc)
-			}
-			if tc, ok := metadataBool(metaMap, "tool_call", "toolCall", "supports_tools", "supportsTools"); ok {
-				return lo.ToPtr(tc)
-			}
-			return nil
-		}
+		nested, _ := item["metadata"].(map[string]any)
+		modelInfo, _ := item["model_info"].(map[string]any)
+		topProvider, _ := item["top_provider"].(map[string]any)
+		limit, _ := item["limit"].(map[string]any)
 
-		entry := upstreamModelMetadata{
-			ContextLength:   getContextLength(),
-			MaxOutputTokens: getMaxOutputTokens(),
-			Description:     getDescription(),
-			ToolCall:        getToolCall(),
+		entry := upstreamModelMetadata{}
+		for _, source := range []map[string]any{item, nested, modelInfo} {
+			if entry.ContextLength == 0 {
+				entry.ContextLength = positiveMetadataInt(source, "context_length", "contextLength", "context_window", "contextWindow", "max_context_length", "max_input_tokens", "max_model_len", "input_token_limit")
+			}
+			if entry.MaxOutputTokens == 0 {
+				entry.MaxOutputTokens = positiveMetadataInt(source, "max_output_tokens", "maxOutputTokens", "max_completion_tokens", "output_token_limit", "max_tokens")
+			}
+			if entry.Description == "" {
+				entry.Description, _ = metadataString(source, "description")
+			}
+			if entry.ToolCall == nil {
+				entry.ToolCall = upstreamCapabilityFlag(source,
+					[]string{"tool_call", "toolCall", "supports_tools", "supportsTools", "supports_function_calling", "function_calling"},
+					[]string{"tools", "tool_call", "tool_use", "function_calling"},
+					[]string{"tools", "tool_choice"})
+			}
+			if entry.Reasoning == nil {
+				entry.Reasoning = upstreamCapabilityFlag(source,
+					[]string{"reasoning", "supports_reasoning", "supports_thinking"},
+					[]string{"reasoning", "thinking"},
+					[]string{"reasoning", "reasoning_effort", "include_reasoning"})
+			}
+		}
+		if entry.ContextLength == 0 {
+			entry.ContextLength = max(positiveMetadataInt(topProvider, "context_length"), positiveMetadataInt(limit, "context"))
+		}
+		if entry.MaxOutputTokens == 0 {
+			entry.MaxOutputTokens = max(positiveMetadataInt(topProvider, "max_completion_tokens"), positiveMetadataInt(limit, "output"))
+		}
+		// A gateway that relays another gateway's list fills capability flags
+		// with false for models it knows nothing about. Without a limit next
+		// to it, a false flag is "not reported", so models.dev may still answer.
+		if entry.ContextLength == 0 && entry.MaxOutputTokens == 0 {
+			if entry.ToolCall != nil && !*entry.ToolCall {
+				entry.ToolCall = nil
+			}
+			if entry.Reasoning != nil && !*entry.Reasoning {
+				entry.Reasoning = nil
+			}
 		}
 		if entry == (upstreamModelMetadata{}) {
 			continue
@@ -138,6 +148,54 @@ func openAIRawChannelModelMetadata(items []map[string]any) map[string]upstreamMo
 		metadata[id] = entry
 	}
 	return metadata
+}
+
+// upstreamCapabilityFlag reads one capability from a model entry. boolKeys
+// are plain booleans; capabilityNames are looked up in a "capabilities" map
+// or list; parameterNames in OpenRouter's "supported_parameters", which is a
+// complete list, so a missing name there means unsupported. Token Harbor
+// reports reasoning as an object whose "efforts" list is empty when the model
+// has no reasoning level and null when unknown.
+func upstreamCapabilityFlag(source map[string]any, boolKeys, capabilityNames, parameterNames []string) *bool {
+	if source == nil {
+		return nil
+	}
+	if flag, ok := metadataBool(source, boolKeys...); ok {
+		return lo.ToPtr(flag)
+	}
+	for _, key := range boolKeys {
+		detail, ok := source[key].(map[string]any)
+		if !ok {
+			continue
+		}
+		if efforts, ok := detail["efforts"].([]any); ok {
+			return lo.ToPtr(len(efforts) > 0)
+		}
+		if effort, ok := detail["default_effort"].(string); ok && effort != "" {
+			return lo.ToPtr(true)
+		}
+	}
+	switch capabilities := source["capabilities"].(type) {
+	case map[string]any:
+		if flag, ok := metadataBool(capabilities, capabilityNames...); ok {
+			return lo.ToPtr(flag)
+		}
+	case []any:
+		// A capability list only proves what it contains.
+		if slices.ContainsFunc(capabilities, func(value any) bool {
+			name, _ := value.(string)
+			return slices.Contains(capabilityNames, name)
+		}) {
+			return lo.ToPtr(true)
+		}
+	}
+	if parameters, ok := source["supported_parameters"].([]any); ok {
+		return lo.ToPtr(slices.ContainsFunc(parameters, func(value any) bool {
+			name, _ := value.(string)
+			return slices.Contains(parameterNames, name)
+		}))
+	}
+	return nil
 }
 
 // fetchGeminiChannelModelMetadata reads Gemini's model list, which reports

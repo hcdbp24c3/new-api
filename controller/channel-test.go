@@ -20,6 +20,7 @@ import (
 	"github.com/QuantumNous/new-api/middleware"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/pkg/billingexpr"
+	"github.com/QuantumNous/new-api/pkg/jsplugin"
 	"github.com/QuantumNous/new-api/relay"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	relayconstant "github.com/QuantumNous/new-api/relay/constant"
@@ -81,6 +82,34 @@ func normalizeChannelTestEndpoint(channel *model.Channel, endpointType string) s
 	return normalized
 }
 
+// providerTestEndpoints are the endpoints a task plugin channel test tries when
+// its plugin's relay routes do not serve the default one, in this order.
+var providerTestEndpoints = []constant.EndpointType{
+	constant.EndpointTypeOpenAI,
+	constant.EndpointTypeOpenAIResponse,
+	constant.EndpointTypeAnthropic,
+	constant.EndpointTypeGemini,
+	constant.EndpointTypeEmbeddings,
+	constant.EndpointTypeJinaRerank,
+	constant.EndpointTypeImageGeneration,
+}
+
+// providerTestEndpoint returns the endpoint a task plugin channel test uses
+// for model instead of requestPath, which meta's relay routes do not serve.
+// ok is false when they serve requestPath or none of the test endpoints.
+func providerTestEndpoint(meta jsplugin.Meta, requestPath, model string) (endpoint constant.EndpointType, ok bool) {
+	if _, served := meta.RelayRoute(requestPath, model); served {
+		return "", false
+	}
+	for _, endpoint := range providerTestEndpoints {
+		info, _ := common.GetDefaultEndpointInfo(endpoint)
+		if _, served := meta.RelayRoute(strings.ReplaceAll(info.Path, "{model}", model), model); served {
+			return endpoint, true
+		}
+	}
+	return "", false
+}
+
 func resolveChannelTestUserID(c *gin.Context) (int, error) {
 	if c != nil {
 		if userID := c.GetInt("id"); userID > 0 {
@@ -113,7 +142,11 @@ func testChannel(ctx context.Context, channel *model.Channel, testUserID int, te
 		constant.ChannelTypeVidu,
 		constant.ChannelTypeTaskPlugin,
 	}
-	if lo.Contains(unsupportedTestChannelTypes, channel.Type) {
+	// A task plugin channel whose plugin has relay routes tests like an
+	// Advanced Custom channel.
+	plugin, bound := service.PluginOfChannel(channel)
+	providerChannel := bound && plugin.Meta.HasProviderPart()
+	if lo.Contains(unsupportedTestChannelTypes, channel.Type) && !providerChannel {
 		channelTypeName := constant.GetChannelTypeName(channel.Type)
 		return testResult{
 			localErr: fmt.Errorf("%s channel test is not supported", channelTypeName),
@@ -172,6 +205,15 @@ func testChannel(ctx context.Context, channel *model.Channel, testUserID int, te
 			requestPath = "/v1/responses"
 		}
 
+	}
+	// A task plugin channel tests on an endpoint its relay routes serve for the
+	// model: the default one when they serve it, else the first they serve.
+	if providerChannel && endpointType == "" {
+		if endpoint, ok := providerTestEndpoint(plugin.Meta, requestPath, testModel); ok {
+			endpointType = string(endpoint)
+			endpointInfo, _ := common.GetDefaultEndpointInfo(endpoint)
+			requestPath = strings.ReplaceAll(endpointInfo.Path, "{model}", testModel)
+		}
 	}
 	// Gemini 原生流式通过 URL action（:streamGenerateContent）表达而非请求体字段，
 	// GeminiChatRequest.IsStream 依据请求 URL 判定，合成请求路径需与生产入口保持一致
@@ -303,7 +345,8 @@ func testChannel(ctx context.Context, channel *model.Channel, testUserID int, te
 	// 更新请求中的模型名称
 	request.SetModelName(testModel)
 
-	apiType, _ := common.ChannelType2APIType(channel.Type)
+	// InitChannelMeta resolved the API type, the provider plugin one included.
+	apiType := info.ApiType
 	if info.RelayMode == relayconstant.RelayModeResponsesCompact &&
 		!common.SupportsResponsesCompact(channel.Type, apiType) {
 		return testResult{
@@ -936,7 +979,7 @@ func TestChannel(c *gin.Context) {
 			})
 			return
 		}
-		summary := testChannelAllKeysForHealthCheck(requestCtx, channel, testUserID, true, disableThreshold)
+		summary := testChannelAllKeysForHealthCheck(requestCtx, channel, testUserID, true, disableThreshold, true)
 		tok := time.Now()
 		milliseconds := tok.Sub(tik).Milliseconds()
 		consumedTime := float64(milliseconds) / 1000.0
@@ -958,14 +1001,16 @@ func TestChannel(c *gin.Context) {
 		}
 		allSucceeded := summary.Succeeded > 0 && summary.Failed == 0
 		c.JSON(http.StatusOK, gin.H{
-			"success":   allSucceeded,
-			"message":   "",
-			"time":      consumedTime,
-			"tested":    summary.Tested,
-			"succeeded": summary.Succeeded,
-			"failed":    summary.Failed,
-			"disabled":  summary.Disabled,
-			"enabled":   summary.Enabled,
+			"success":      allSucceeded,
+			"message":      "",
+			"time":         consumedTime,
+			"tested":       summary.Tested,
+			"succeeded":    summary.Succeeded,
+			"failed":       summary.Failed,
+			"disabled":     summary.Disabled,
+			"enabled":      summary.Enabled,
+			"errors":       summary.Errors,
+			"auto_ban_off": summary.AutoBanOff,
 		})
 		return
 	}
@@ -1024,15 +1069,16 @@ func TestChannel(c *gin.Context) {
 			return
 		}
 
-		// Disable the key if it should be banned.
-		if shouldBanKey && channel.GetAutoBan() {
-			processChannelError(result.context, *types.NewChannelError(channel.Id, channel.Type, channel.Name, true, common.GetContextKeyString(result.context, constant.ContextKeyChannelKey), channel.GetAutoBan()), newAPIError, nil)
-		}
+		// A key tested by hand is disabled whenever the upstream rejected it.
+		keySummary := channelTestSummary{}
+		keySummary.recordManualKeyFailure(channel, keys, testKeyIndex, result.localErr, newAPIError, shouldBanKey)
 
 		resp := gin.H{
-			"success": false,
-			"message": "",
-			"time":    consumedTime,
+			"success":      false,
+			"message":      "",
+			"time":         consumedTime,
+			"disabled":     keySummary.Disabled,
+			"auto_ban_off": keySummary.AutoBanOff,
 		}
 		if result.localErr != nil {
 			resp["message"] = result.localErr.Error()
@@ -1106,6 +1152,62 @@ type channelTestSummary struct {
 	Failed    int `json:"failed"`
 	Disabled  int `json:"disabled"`
 	Enabled   int `json:"enabled"`
+	// Errors lists the first few key failures of a manual test, and
+	// AutoBanOff reports that the channel keeps failed keys enabled.
+	Errors     []string `json:"errors,omitempty"`
+	AutoBanOff bool     `json:"auto_ban_off,omitempty"`
+}
+
+const manualKeyTestErrorLimit = 5
+
+// keyRejectedByUpstream reports whether a key test failed because the upstream
+// answered with an error. A failure new-api raised itself, or a request that
+// never reached the upstream, says nothing about the key.
+func keyRejectedByUpstream(err *types.NewAPIError) bool {
+	if err == nil {
+		return false
+	}
+	switch service.RelayErrorSource(err) {
+	case "channel", "upstream":
+		return true
+	}
+	return false
+}
+
+// recordManualKeyFailure handles a failed key of a test the operator started by
+// hand. Unlike the scheduled health check, it disables every key the upstream
+// rejected, whatever the automatic-disable rules say, and it does so before
+// returning so that the caller's refreshed key list already shows the result.
+// It reports whether the key was disabled.
+func (summary *channelTestSummary) recordManualKeyFailure(channel *model.Channel, keys []string, index int, localErr error, apiErr *types.NewAPIError, shouldBan bool) bool {
+	if localErr == nil && apiErr == nil {
+		return false
+	}
+	message := ""
+	if apiErr != nil {
+		message = apiErr.MaskSensitiveErrorWithStatusCode()
+	} else {
+		message = localErr.Error()
+	}
+	if len(summary.Errors) < manualKeyTestErrorLimit {
+		summary.Errors = append(summary.Errors, fmt.Sprintf("#%d: %s", index+1, message))
+	}
+	if apiErr == nil || index < 0 || index >= len(keys) {
+		return false
+	}
+	if !shouldBan && !keyRejectedByUpstream(apiErr) {
+		return false
+	}
+	if !channel.GetAutoBan() {
+		summary.AutoBanOff = true
+		return false
+	}
+	if status, ok := channel.ChannelInfo.MultiKeyStatusList[index]; ok && status != common.ChannelStatusEnabled {
+		return false
+	}
+	service.DisableChannel(*types.NewChannelError(channel.Id, channel.Type, channel.Name, true, keys[index], true), message)
+	summary.Disabled++
+	return true
 }
 
 func testChannelForHealthCheck(ctx context.Context, channel *model.Channel, testUserID int, allowDisable bool, disableThreshold int64) channelTestSummary {
@@ -1114,7 +1216,7 @@ func testChannelForHealthCheck(ctx context.Context, channel *model.Channel, test
 
 	// If channel has multiple keys, test all of them
 	if channel.ChannelInfo.IsMultiKey {
-		return testChannelAllKeysForHealthCheck(ctx, channel, testUserID, allowDisable, disableThreshold)
+		return testChannelAllKeysForHealthCheck(ctx, channel, testUserID, allowDisable, disableThreshold, false)
 	}
 
 	// Single key channel - test once
@@ -1167,7 +1269,7 @@ func testChannelForHealthCheck(ctx context.Context, channel *model.Channel, test
 }
 
 // testChannelAllKeysForHealthCheck tests all keys in a multi-key channel with concurrency
-func testChannelAllKeysForHealthCheck(ctx context.Context, channel *model.Channel, testUserID int, allowDisable bool, disableThreshold int64) channelTestSummary {
+func testChannelAllKeysForHealthCheck(ctx context.Context, channel *model.Channel, testUserID int, allowDisable bool, disableThreshold int64, manual bool) channelTestSummary {
 	summary := channelTestSummary{}
 	isChannelEnabled := channel.Status == common.ChannelStatusEnabled
 	tik := time.Now()
@@ -1192,7 +1294,7 @@ func testChannelAllKeysForHealthCheck(ctx context.Context, channel *model.Channe
 
 	// Use sequential testing if concurrency is 1 or only one key
 	if concurrency == 1 || len(keys) == 1 {
-		return testChannelAllKeysSequential(ctx, channel, keys, testUserID, allowDisable, disableThreshold, isChannelEnabled)
+		return testChannelAllKeysSequential(ctx, channel, keys, testUserID, allowDisable, disableThreshold, isChannelEnabled, manual)
 	}
 
 	// Test keys concurrently with bounded concurrency
@@ -1275,7 +1377,9 @@ func testChannelAllKeysForHealthCheck(ctx context.Context, channel *model.Channe
 		}
 
 		// Disable individual key if needed
-		if allowDisable && shouldBanKey && channel.GetAutoBan() {
+		if manual {
+			summary.recordManualKeyFailure(channel, keys, res.index, res.result.localErr, newAPIError, shouldBanKey)
+		} else if allowDisable && shouldBanKey && channel.GetAutoBan() {
 			processChannelError(res.result.context, *types.NewChannelError(channel.Id, channel.Type, channel.Name, true, common.GetContextKeyString(res.result.context, constant.ContextKeyChannelKey), channel.GetAutoBan()), newAPIError, nil)
 			summary.Disabled++
 		}
@@ -1331,7 +1435,7 @@ func testChannelAllKeysForHealthCheck(ctx context.Context, channel *model.Channe
 }
 
 // testChannelAllKeysSequential tests all keys sequentially (used when concurrency is 1)
-func testChannelAllKeysSequential(ctx context.Context, channel *model.Channel, keys []string, testUserID int, allowDisable bool, disableThreshold int64, isChannelEnabled bool) channelTestSummary {
+func testChannelAllKeysSequential(ctx context.Context, channel *model.Channel, keys []string, testUserID int, allowDisable bool, disableThreshold int64, isChannelEnabled bool, manual bool) channelTestSummary {
 	summary := channelTestSummary{}
 	tik := time.Now()
 
@@ -1375,7 +1479,9 @@ func testChannelAllKeysSequential(ctx context.Context, channel *model.Channel, k
 		}
 
 		// Disable individual key if needed
-		if allowDisable && shouldBanKey && channel.GetAutoBan() {
+		if manual {
+			summary.recordManualKeyFailure(channel, keys, i, result.localErr, newAPIError, shouldBanKey)
+		} else if allowDisable && shouldBanKey && channel.GetAutoBan() {
 			processChannelError(result.context, *types.NewChannelError(channel.Id, channel.Type, channel.Name, true, common.GetContextKeyString(result.context, constant.ContextKeyChannelKey), channel.GetAutoBan()), newAPIError, nil)
 			summary.Disabled++
 		}
