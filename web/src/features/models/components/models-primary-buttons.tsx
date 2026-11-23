@@ -50,6 +50,10 @@ export function ModelsPrimaryButtons() {
     setOpen('sync-wizard')
   }
 
+  const handleModelDevSync = () => {
+    setOpen('model-dev-sync')
+  }
+
   const handlePrefillGroups = () => {
     setOpen('prefill-groups')
   }
@@ -58,6 +62,14 @@ export function ModelsPrimaryButtons() {
     <div className='flex flex-wrap items-center gap-2'>
       <Button onClick={handleSync} variant='outline' size='sm' className='hidden sm:inline-flex'>
         {t('Sync metadata')}
+      </Button>
+      <Button
+        onClick={handleModelDevSync}
+        variant='outline'
+        size='sm'
+        className='hidden sm:inline-flex'
+      >
+        {t('Sync capabilities (API + models.dev)')}
       </Button>
       {canPrice && (
         <Button
@@ -89,6 +101,12 @@ export function ModelsPrimaryButtons() {
           {/* Mobile: show hidden sync buttons in dropdown */}
           <DropdownMenuItem onClick={handleSync} className='sm:hidden'>
             {t('Sync metadata')}
+            <DropdownMenuShortcut>
+              <Download className='h-4 w-4' />
+            </DropdownMenuShortcut>
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={handleModelDevSync} className='sm:hidden'>
+            {t('Sync capabilities (API + models.dev)')}
             <DropdownMenuShortcut>
               <Download className='h-4 w-4' />
             </DropdownMenuShortcut>
