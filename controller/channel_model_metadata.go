@@ -39,11 +39,8 @@ func fetchChannelUpstreamModelMetadata(channel *model.Channel) (map[string]upstr
 		// Task plugin channels expose a static model list with no metadata.
 		return nil, nil
 	}
-	if channel.ChannelInfo.IsMultiKey {
-		// Model discovery already refuses multi-key channels, and probing each
-		// key would multiply requests without adding data.
-		return nil, nil
-	}
+	// A multi-key channel is asked once, with its next enabled key: the keys of
+	// one channel share the upstream catalog, so one answer covers all of them.
 
 	baseURL := constant.GetChannelBaseURL(channel.Type)
 	if channel.GetBaseURL() != "" {
