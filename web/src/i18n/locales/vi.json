@@ -115,6 +115,8 @@
     "{{selected}} of {{total}} changed fields selected": "Đã chọn {{selected}} / {{total}} trường thay đổi",
     "{{start}}–{{end}}": "{{start}}–{{end}}",
     "{{success}} succeeded, {{failed}} failed": "{{success}} thành công, {{failed}} thất bại",
+    "{{count}} failed key(s) disabled": "Đã vô hiệu hóa {{count}} key lỗi",
+    "Failed keys were kept: auto-disable is off for this channel": "Giữ nguyên các key lỗi: kênh này đang tắt tự động vô hiệu hóa",
     "{{synced}}/{{total}} nodes updated": "{{synced}}/{{total}} nút đã cập nhật",
     "{{target}} test failed": "Kiểm tra {{target}} thất bại",
     "{{target}} test succeeded": "Kiểm tra {{target}} thành công",

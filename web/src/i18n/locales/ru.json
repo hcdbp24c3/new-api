@@ -115,6 +115,8 @@
     "{{selected}} of {{total}} changed fields selected": "Выбрано изменённых полей: {{selected}} из {{total}}",
     "{{start}}–{{end}}": "{{start}}–{{end}}",
     "{{success}} succeeded, {{failed}} failed": "{{success}} успешно, {{failed}} с ошибкой",
+    "{{count}} failed key(s) disabled": "Отключено ключей с ошибкой: {{count}}",
+    "Failed keys were kept: auto-disable is off for this channel": "Ключи с ошибкой оставлены: автоотключение для этого канала выключено",
     "{{synced}}/{{total}} nodes updated": "Обновлено узлов: {{synced}}/{{total}}",
     "{{target}} test failed": "Тест {{target}} не выполнен",
     "{{target}} test succeeded": "Тест {{target}} успешно выполнен",
