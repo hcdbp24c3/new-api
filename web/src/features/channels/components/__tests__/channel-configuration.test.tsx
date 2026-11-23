@@ -281,7 +281,7 @@ test.each([
   },
   {
     type: 45,
-    label: /^API Base URL/,
+    label: /^Base URL/,
     url: 'https://volcengine.server.example',
     savedUrl: 'https://custom.example',
   },
@@ -307,12 +307,6 @@ test.each([
     const user = userEvent.setup()
     render(<ConfigurationHarness currentRow={editingChannel} />)
     await screen.findByDisplayValue('Existing channel')
-    if (type === 45) {
-      const addressLabel = screen.getByText('API Base URL')
-      for (let click = 0; click < 10; click++) {
-        fireEvent.click(addressLabel)
-      }
-    }
     const address = screen.getByRole('textbox', { name: label })
     await waitFor(() => expect(address).toHaveAttribute('placeholder', url))
     expect(address).toHaveValue('https://saved.example')

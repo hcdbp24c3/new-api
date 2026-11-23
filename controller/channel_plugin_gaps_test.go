@@ -313,6 +313,9 @@ func TestGapsUpdateAllBalancesRunsAsASystemTask(t *testing.T) {
 	}))
 	t.Cleanup(upstream.Close)
 	channel := insertPluginChannel(t, "gaps-balance-all", upstream.URL, "sk-all", false)
+	// The bulk update only covers channels that opted in to automatic balance updates.
+	channel.SetOtherSettings(dto.ChannelOtherSettings{AutoUpdateBalance: true})
+	require.NoError(t, model.DB.Model(channel).Update("settings", channel.OtherSettings).Error)
 
 	type queuedRun struct {
 		Started bool   `json:"started"`
