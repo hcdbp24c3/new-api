@@ -107,14 +107,14 @@ async function renderOverview() {
 }
 
 describe('overview setup guide', () => {
-  it('shows usage first and keeps the recommended actions when setup is complete', async () => {
+  it('keeps the recommended actions above usage when setup is complete', async () => {
     await renderOverview()
 
     const toggle = await screen.findByRole('button', { name: 'Setup guide' })
     expect(toggle).toHaveAttribute('aria-expanded', 'false')
     expect(
       screen.getAllByRole('heading').map((heading) => heading.textContent)
-    ).toEqual(['Overview', 'Usage at a glance', 'Keep the platform ready'])
+    ).toEqual(['Overview', 'Keep the platform ready', 'Usage at a glance'])
     expect(screen.queryByText('Setup guide complete')).not.toBeInTheDocument()
     expect(screen.queryByText('Setup progress: 3/3')).not.toBeInTheDocument()
     // Collapsing the guide hides only the guide; the quick actions stay reachable.
